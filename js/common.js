@@ -846,7 +846,7 @@ void main() {
 }`;
 const lin = c => new THREE.Color(c).convertSRGBToLinear();
 // Emitter: n Sprites, Startwerte per spawn(i) -> { p:[x,y,z], v:[x,y,z], delay, life, s0, s1 }
-export function emitter(r, n, { map, additive = false, loop = false, gravity = [0, 0, 0], drag = 0, grow = .6, colors = ['#fff', '#aaa', '#444'], opacity = 1, bright = 1, fadeIn = .1, fadeOut = .6, shade = 0, variation = .3, spin = 1, aspect = 1, spawn, renderOrder = 0 }) {
+export function emitter(r, n, { map, additive = false, loop = false, gravity = [0, 0, 0], drag = 0, grow = .6, colors = ['#fff', '#aaa', '#444'], opacity = 1, bright = 1, fadeIn = .1, fadeOut = .6, shade = 0, variation = .3, spin = 1, aspect = 1, rotate = true, spawn, renderOrder = 0 }) {
   const geo = new THREE.InstancedBufferGeometry();
   const quad = new THREE.PlaneGeometry(1, 1);
   geo.setAttribute('position', quad.attributes.position); geo.setAttribute('uv', quad.attributes.uv); geo.setIndex(quad.index);
@@ -854,7 +854,7 @@ export function emitter(r, n, { map, additive = false, loop = false, gravity = [
   for (let i = 0; i < n; i++) {
     const s = spawn(i);
     pos.set(s.p, i * 3); vel.set(s.v, i * 3); life.set([s.delay, s.life, s.s0, s.s1], i * 4);
-    misc.set([r() * 6.283, (r() - .5) * 2 * spin, r()], i * 3);
+    misc.set([rotate ? r() * 6.283 : 0, rotate ? (r() - .5) * 2 * spin : 0, r()], i * 3);
   }
   geo.setAttribute('aPos', new THREE.InstancedBufferAttribute(pos, 3));
   geo.setAttribute('aVel', new THREE.InstancedBufferAttribute(vel, 3));
@@ -889,7 +889,7 @@ export function fireball(r, { size = 2.5, duration = 3.2, debris = 60, sparks = 
     spawn: () => ({ p: [0, size * .3, 0], v: [0, 0, 0], delay: 0, life: .22, s0: size * 1.2, s1: size * 3.2 }) }));
   add(emitter(r, 36, { map: FIRE_TEX(), additive: true, colors: ['#ffeaa8', '#ff9a30', '#c83a08'], bright: 1.15, drag: 3.2, gravity: [0, size * 1.2, 0], grow: .5, fadeIn: .08, fadeOut: .45, variation: .4, renderOrder: 2,
     spawn: () => { const v = sph(r, size * (1.5 + r() * 3)); v[1] = Math.abs(v[1]) + size * .5; return { p: sph(r, size * .25), v, delay: r() * .12, life: .45 + r() * .5, s0: size * .45, s1: size * 1.15 }; } }));
-  add(emitter(r, 22, { map: FIRE_TEX(), additive: true, colors: ['#ffeab0', '#ffa838', '#c84008'], bright: 1.05, drag: 2.4, grow: .8, fadeIn: .1, fadeOut: .4, variation: .4, renderOrder: 2,
+  add(emitter(r, 22, { map: FIRE_TEX(), additive: true, colors: ['#ffeab0', '#ffa838', '#c84008'], bright: 1.05, drag: 2.4, grow: .8, fadeIn: .1, fadeOut: .4, variation: .4, rotate: false, aspect: 2.0, renderOrder: 2,
     spawn: () => ({ p: sph(r, size * .3), v: [(r() - .5) * size * 2.5, size * (4 + r() * 4), (r() - .5) * size * 2.5], delay: .04 + r() * .3, life: .4 + r() * .4, s0: size * .55, s1: size * .25 }) }));
   add(emitter(r, 60, { map: SMOKE_TEX(), colors: ['#b86a38', '#4a403a', '#1c1a18'], drag: 1.4, gravity: [0, size * .55, 0], grow: .55, opacity: .55, fadeIn: .12, fadeOut: .5, shade: .5, variation: .35, spin: .6, renderOrder: 1,
     spawn: () => { const v = sph(r, size * (.8 + r() * 2.2)); v[1] = Math.abs(v[1]) * .8 + size * 1.2; return { p: sph(r, size * .35), v, delay: .05 + r() * .7, life: Math.max(1.2, duration - .7) * (.6 + r() * .4), s0: size * .45, s1: size * 2.0 }; } }));
@@ -914,25 +914,30 @@ export function fireball(r, { size = 2.5, duration = 3.2, debris = 60, sparks = 
   return g;
 }
 
-// Dauerbrand: fortlaufend aufsteigende Flammen, dünner Rauch, Glut (Loop, deterministisch)
-export function flame(r, { size = 1, tongues = 6, embers = 24 } = {}) {
+// Dauerbrand: kurze, züngelnde Flammen über einer Glutbasis, Hitzeschein, schwerer dunkler Rauch, Funken (Loop)
+export function flame(r, { size = 1, tongues = 6, embers = 24, spread = 1 } = {}) {
   const g = new THREE.Group();
   const parts = [];
   const add = m => { g.add(m); parts.push(m); return m; };
-  add(emitter(r, tongues * 5, { map: FIRE_TEX(), additive: true, loop: true, colors: ['#fff4c0', '#ff9a30', '#b02810'], bright: 1.2, drag: 1.5, grow: .9, fadeIn: .15, fadeOut: .45, variation: .4, renderOrder: 2,
-    spawn: () => ({ p: [(r() - .5) * size * .7, 0, (r() - .5) * size * .7], v: [(r() - .5) * size * .5, size * (1.4 + r() * 1.6), (r() - .5) * size * .5], delay: r() * 3, life: .55 + r() * .5, s0: size * .55, s1: size * .12 }) }));
-  add(emitter(r, tongues * 2, { map: SMOKE_TEX(), loop: true, colors: ['#7a5a40', '#3a3330', '#1c1a18'], drag: .8, gravity: [0, size * .4, 0], grow: .6, opacity: .35, fadeIn: .2, fadeOut: .5, shade: .4, spin: .5, renderOrder: 1,
-    spawn: () => ({ p: [(r() - .5) * size * .5, size * .6, (r() - .5) * size * .5], v: [(r() - .5) * size * .6, size * (1.2 + r()), (r() - .5) * size * .6], delay: r() * 3, life: 1.4 + r() * 1.0, s0: size * .4, s1: size * 1.6 }) }));
+  const sx = size * .5 * spread, sz = size * .35 * spread;
+  add(emitter(r, 1, { map: DOT_TEX(), additive: true, loop: true, colors: ['#ff8a30', '#ff7020', '#ff6010'], bright: .16, fadeIn: .3, fadeOut: .5, grow: 1, renderOrder: 1,
+    spawn: () => ({ p: [0, size * .4, 0], v: [0, 0, 0], delay: 0, life: 1, s0: size * (1.6 + spread * .6), s1: size * (1.6 + spread * .6) }) }));
+  add(emitter(r, tongues * 6, { map: FIRE_TEX(), additive: true, loop: true, colors: ['#fff0b8', '#ffa030', '#c02808'], bright: 1.2, drag: 2.2, grow: .7, fadeIn: .12, fadeOut: .4, variation: .45, rotate: false, aspect: 1.9, renderOrder: 2,
+    spawn: () => ({ p: [(r() - .5) * 2 * sx, 0, (r() - .5) * 2 * sz], v: [(r() - .5) * size * .8, size * (1.6 + r() * 2.4), (r() - .5) * size * .8], delay: r() * 3, life: .4 + r() * .45, s0: size * .6, s1: size * .1 }) }));
+  add(emitter(r, tongues * 2, { map: FIRE_TEX(), additive: true, loop: true, colors: ['#ffd090', '#ff7a20', '#8a1800'], bright: 1.0, drag: 1.4, grow: .9, fadeIn: .1, fadeOut: .35, variation: .5, rotate: false, aspect: 2.4, renderOrder: 2,
+    spawn: () => ({ p: [(r() - .5) * 2 * sx, size * .3, (r() - .5) * 2 * sz], v: [(r() - .5) * size * 1.2, size * (2.5 + r() * 3), (r() - .5) * size * 1.2], delay: r() * 3, life: .5 + r() * .5, s0: size * .4, s1: size * .08 }) }));
+  add(emitter(r, tongues * 4, { map: SMOKE_TEX(), loop: true, colors: ['#5a4036', '#2a2624', '#141312'], drag: .5, gravity: [0, size * .35, 0], grow: .55, opacity: .55, fadeIn: .18, fadeOut: .5, shade: .45, spin: .4, renderOrder: 1,
+    spawn: () => ({ p: [(r() - .5) * 2 * sx, size * .8, (r() - .5) * 2 * sz], v: [(r() - .5) * size * .8 + size * .4, size * (1.8 + r() * 1.6), (r() - .5) * size * .8], delay: r() * 4, life: 2.6 + r() * 1.6, s0: size * .5, s1: size * 2.8 }) }));
   add(emitter(r, embers, { map: DOT_TEX(), additive: true, loop: true, colors: ['#ffd080', '#ff7020', '#7a2000'], bright: 1.4, drag: .5, gravity: [0, size * .3, 0], grow: 1, fadeIn: .05, fadeOut: .5, renderOrder: 3,
-    spawn: () => ({ p: [(r() - .5) * size * .6, size * .2, (r() - .5) * size * .6], v: [(r() - .5) * size * .8, size * (1 + r() * 1.5), (r() - .5) * size * .8], delay: r() * 3, life: 1 + r() * 1.2, s0: size * .06, s1: size * .02 }) }));
-  const light = new THREE.PointLight('#ff9040', 0, size * 8, 1.6); light.position.y = size * .6; g.add(light);
+    spawn: () => ({ p: [(r() - .5) * 2 * sx, size * .2, (r() - .5) * 2 * sz], v: [(r() - .5) * size * 1.2, size * (1.5 + r() * 2.5), (r() - .5) * size * 1.2], delay: r() * 3, life: .8 + r() * 1.4, s0: size * .06, s1: size * .02 }) }));
+  const light = new THREE.PointLight('#ff8a30', 0, size * 10, 1.6); light.position.y = size * .7; g.add(light);
   g.visible = false;
   g.userData.at = (age, strength = 1) => {
     if (age < 0) { g.visible = false; light.intensity = 0; return; }
     g.visible = true;
-    const on = Math.min(1, age / .5) * strength;
+    const on = Math.min(1, age / 1.2) * strength;
     for (const m of parts) m.userData.set(age, on);
-    light.intensity = size * 4 * on * (1 + .25 * Math.sin(age * 23) + .15 * Math.sin(age * 41));
+    light.intensity = size * 5 * on * (1 + .25 * Math.sin(age * 23) + .15 * Math.sin(age * 41));
   };
   return g;
 }
@@ -944,15 +949,15 @@ export function waterColumn(r, { height = 9, radius = .9, duration = 2.6, drops 
   const parts = [];
   const add = m => { g.add(m); parts.push(m); return m; };
   const v0 = Math.sqrt(2 * 9.81 * height);
-  const col = ['#f3f7fb', '#dfe8ef', '#b9c7d2'];
+  const col = ['#e9eff4', '#cdd8e1', '#9cadbc'];
   // Sprühkuppel am Fuß
   add(emitter(r, 40, { map: SPRAY_TEX(), colors: col, gravity: [0, -9.81, 0], drag: .8, grow: .5, opacity: .6, fadeIn: .05, fadeOut: .4, shade: .35, renderOrder: 1,
     spawn: () => { const a = r() * 6.283, sp = radius * (3 + r() * 4); return { p: [Math.cos(a) * radius * .4, .1, Math.sin(a) * radius * .4], v: [Math.cos(a) * sp, 2 + r() * 4, Math.sin(a) * sp], delay: r() * .1, life: .6 + r() * .5, s0: radius * .7, s1: radius * 2.0 }; } }));
   // Säule
-  add(emitter(r, 260, { map: SPRAY_TEX(), colors: col, gravity: [0, -9.81 * .85, 0], grow: .45, opacity: .7, fadeIn: .08, fadeOut: .55, shade: .45, variation: .3, spin: .15, aspect: 1.6, renderOrder: 1,
+  add(emitter(r, 260, { map: SPRAY_TEX(), colors: col, gravity: [0, -9.81 * .85, 0], grow: .45, opacity: .6, fadeIn: .08, fadeOut: .55, shade: .45, variation: .3, rotate: false, aspect: 1.6, renderOrder: 1,
     spawn: () => { const a = r() * 6.283, d = Math.sqrt(r()) * radius * .5, lat = radius * (.2 + r() * 1.3); return { p: [Math.cos(a) * d, .1, Math.sin(a) * d], v: [Math.cos(a) * lat, v0 * (.7 + r() * .45), Math.sin(a) * lat], delay: r() * .35, life: 1.8 + r() * .9, s0: radius * .7, s1: radius * 2.2 }; } }));
   // Fontänenstrahlen über die Säule hinaus
-  add(emitter(r, 30, { map: SPRAY_TEX(), colors: col, gravity: [0, -9.81, 0], grow: .5, opacity: .8, fadeIn: .05, fadeOut: .5, shade: .3, spin: .1, aspect: 2.2, renderOrder: 1,
+  add(emitter(r, 30, { map: SPRAY_TEX(), colors: col, gravity: [0, -9.81, 0], grow: .5, opacity: .8, fadeIn: .05, fadeOut: .5, shade: .3, rotate: false, aspect: 2.2, renderOrder: 1,
     spawn: () => { const a = r() * 6.283, lat = radius * (.5 + r() * 2); return { p: [0, .2, 0], v: [Math.cos(a) * lat, v0 * (1.1 + r() * .35), Math.sin(a) * lat], delay: .03 + r() * .25, life: 1.6 + r() * .6, s0: radius * .25, s1: radius * .7 }; } }));
   // Tropfen
   add(emitter(r, drops, { map: DOT_TEX(), colors: ['#ffffff', '#e8f0f6', '#cfdbe4'], gravity: [0, -9.81, 0], grow: 1, opacity: .6, fadeIn: 0, fadeOut: .7, renderOrder: 2,
@@ -1079,21 +1084,68 @@ export function faceZ(model) {
 }
 
 // Wasserfläche mit Wellen: userData.at(t)
-export function wavePlane(w, h, seg = 48, color = P.water, { amp = .12, opts = {} } = {}) {
-  const geo = new THREE.PlaneGeometry(w, h, seg, seg);
-  const m = mesh(geo, color, opts);
-  m.rotation.x = -Math.PI / 2; m.castShadow = false;
+// Umgebungsverlauf (Himmel oben, Horizont, dunkel unten) als Equirect-Textur für Spiegelungen
+const ENV = {};
+export function envGradient(top = '#1a2230', horizon = '#4a5a6c', bottom = '#05070a') {
+  const key = top + horizon + bottom; if (ENV[key]) return ENV[key];
+  const W = 64, Hh = 32, data = new Uint8Array(W * Hh * 4);
+  const ct = new THREE.Color(top), ch = new THREE.Color(horizon), cb = new THREE.Color(bottom), c = new THREE.Color();
+  for (let y = 0; y < Hh; y++) {
+    const v = y / (Hh - 1);                       // 0 = oben, 1 = unten
+    if (v < .5) c.copy(ct).lerp(ch, Math.pow(v * 2, 1.6)); else c.copy(ch).lerp(cb, Math.pow((v - .5) * 2, .5));
+    for (let x = 0; x < W; x++) { const i = (y * W + x) * 4; data[i] = c.r * 255; data[i + 1] = c.g * 255; data[i + 2] = c.b * 255; data[i + 3] = 255; }
+  }
+  const t = new THREE.DataTexture(data, W, Hh); t.mapping = THREE.EquirectangularReflectionMapping; t.colorSpace = THREE.SRGBColorSpace; t.needsUpdate = true;
+  ENV[key] = t; return t;
+}
+// Wasserfläche: mehrere Wellenlagen, Normalen pro Bild, glänzendes Material mit Himmelsspiegelung. userData.at(t)
+export function wavePlane(w, h, seg = 48, color = P.water, { amp = .12, opts = {}, roughness = .22, env = null } = {}) {
+  const geo = new THREE.PlaneGeometry(w, h, Math.max(seg, 96), Math.max(seg, 96));
+  const material = new THREE.MeshStandardMaterial({ color, roughness, metalness: .05, envMap: env || envGradient(), envMapIntensity: 1.2, ...opts });
+  const m = new THREE.Mesh(geo, material);
+  m.receiveShadow = true; m.castShadow = false;
+  m.rotation.x = -Math.PI / 2;
   const pos = geo.attributes.position;
   const base = Float32Array.from(pos.array);
   m.userData.at = t => {
     const a = pos.array;
     for (let i = 0; i < pos.count; i++) {
       const x = base[i * 3], y = base[i * 3 + 1];
-      a[i * 3 + 2] = amp * (Math.sin(x * .5 + t * 1.6) + .6 * Math.sin(y * .35 + t * 1.1) + .3 * Math.sin((x + y) * .9 + t * 2.3));
+      a[i * 3 + 2] = amp * (Math.sin(x * .5 + t * 1.6) + .6 * Math.sin(y * .35 + t * 1.1) + .35 * Math.sin((x + y) * .9 + t * 2.3)
+        + .25 * Math.sin(x * 1.7 - y * .8 + t * 3.1) + .15 * Math.sin(x * 3.1 + y * 2.3 - t * 4.2) + .1 * Math.sin(-x * 2.2 + y * 4.1 + t * 5.0));
     }
     pos.needsUpdate = true; geo.computeVertexNormals();
   };
   return m;
+}
+
+// Fliegerbombe, Spitze zeigt nach +Z (mit lookAt entlang der Flugbahn ausrichten)
+export function bomb(length = 1.1, color = '#23262b') {
+  const g = new THREE.Group();
+  const body = cyl(.14, .14, length * .6, color, 10); body.rotation.x = Math.PI / 2; g.add(body);
+  const nose = cone(.14, length * .3, color, 10); nose.rotation.x = Math.PI / 2; nose.position.z = length * .45; g.add(nose);
+  const tail = cyl(.08, .14, length * .25, color, 10); tail.rotation.x = Math.PI / 2; tail.position.z = -length * .42; g.add(tail);
+  for (let i = 0; i < 4; i++) { const f = box(.02, .3, .22, color); f.position.z = -length * .45; f.rotation.z = i * Math.PI / 2; g.add(f); }
+  g.traverse(o => { if (o.isMesh) { o.castShadow = false; } });
+  return g;
+}
+
+// Rauch- und Feuerfahne entlang eines Pfads: Partikel i startet bei path(i/n) zur Zeit (i/n)*duration. userData.at(age)
+export function trail(r, path, { duration = 1.6, n = 60, size = .5, fire = true } = {}) {
+  const g = new THREE.Group();
+  const parts = [];
+  const pt = new THREE.Vector3();
+  const smoke = emitter(r, n, { map: SMOKE_TEX(), colors: ['#6a5a50', '#3a3532', '#1a1816'], drag: 1.5, gravity: [0, .6, 0], grow: .5, opacity: .6, fadeIn: .1, fadeOut: .5, shade: .45, spin: .6, renderOrder: 1,
+    spawn: i => { path(i / n, pt); return { p: [pt.x + (r() - .5) * size * .4, pt.y + (r() - .5) * size * .4, pt.z + (r() - .5) * size * .4], v: [(r() - .5) * size, size * (.5 + r()), (r() - .5) * size], delay: (i / n) * duration, life: 1.2 + r() * 1.0, s0: size * .5, s1: size * 2.4 }; } });
+  g.add(smoke); parts.push(smoke);
+  if (fire) {
+    const fl = emitter(r, n >> 1, { map: FIRE_TEX(), additive: true, colors: ['#ffe6a0', '#ff8a28', '#b02408'], bright: 1.1, drag: 2, grow: .8, fadeIn: .05, fadeOut: .4, renderOrder: 2,
+      spawn: i => { path(i / (n >> 1), pt); return { p: [pt.x, pt.y, pt.z], v: [(r() - .5) * size, size * (.5 + r()), (r() - .5) * size], delay: (i / (n >> 1)) * duration, life: .25 + r() * .3, s0: size * .9, s1: size * .3 }; } });
+    g.add(fl); parts.push(fl);
+  }
+  g.visible = false;
+  g.userData.at = age => { if (age < 0 || age > duration + 3) { g.visible = false; return; } g.visible = true; for (const m of parts) m.userData.set(age); };
+  return g;
 }
 
 // Unterschrift: Füller fährt zeilenweise über ein Blatt, Zeilen erscheinen nach und nach
