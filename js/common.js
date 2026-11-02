@@ -777,6 +777,11 @@ export function fireball(r, { size = 2.5, duration = 2.6, debris = 60, sparks = 
     pts.material.toneMapped = false; return pts;
   };
   const deb = mkPoints(debris, '#2a2420', .22, .95), spk = mkPoints(sparks, '#ffd080', .09, 1);
+  const emb = mkPoints(Math.max(8, debris >> 2), '#ff7a1a', .3, 1), ash = mkPoints(sparks >> 1, '#ff9a3a', .07, .9);
+  const ev = [], av = [];
+  for (let i = 0; i < Math.max(8, debris >> 2); i++) { const a = r() * 6.283, e = .5 + r() * .9, sp = size * (2.5 + r() * 3); ev.push([Math.cos(a) * Math.cos(e) * sp, Math.sin(e) * sp, Math.sin(a) * Math.cos(e) * sp, r()]); }
+  for (let i = 0; i < (sparks >> 1); i++) av.push([(r() - .5) * size * 1.6, r() * size * 1.5, (r() - .5) * size * 1.6, .4 + r() * 1.2]);
+  g.add(emb, ash);
   const dv = [], sv = [];
   for (let i = 0; i < debris; i++) { const a = r() * 6.283, e = .3 + r() * 1.1, sp = size * (2 + r() * 4); dv.push([Math.cos(a) * Math.cos(e) * sp, Math.sin(e) * sp, Math.sin(a) * Math.cos(e) * sp, r()]); }
   for (let i = 0; i < sparks; i++) { const a = r() * 6.283, e = r() * 1.5, sp = size * (3 + r() * 6); sv.push([Math.cos(a) * Math.cos(e) * sp, Math.sin(e) * sp, Math.sin(a) * Math.cos(e) * sp, r()]); }
@@ -802,8 +807,8 @@ export function fireball(r, { size = 2.5, duration = 2.6, debris = 60, sparks = 
       b.m.material.emissive.copy(col).multiplyScalar(bu < .3 ? 1.3 : Math.max(0, 1 - bu * 1.4));
       b.m.visible = bu > 0;
     }
-    const cu = clamp(age / .5, 0, 1);
-    core.scale.setScalar(Math.max(.001, size * .55 * Math.sin(cu * Math.PI)));
+    const cu = clamp(age / .35, 0, 1);
+    core.scale.setScalar(Math.max(.001, size * .4 * Math.sin(cu * Math.PI)));
     core.visible = cu < 1;
     const pa = deb.geometry.attributes.position.array;
     for (let i = 0; i < debris; i++) { const d = dv[i], tt = age * (.7 + d[3] * .6); pa[i * 3] = d[0] * tt; pa[i * 3 + 1] = Math.max(0, d[1] * tt - 9.81 * tt * tt * .5); pa[i * 3 + 2] = d[2] * tt; }
@@ -811,6 +816,12 @@ export function fireball(r, { size = 2.5, duration = 2.6, debris = 60, sparks = 
     const sa = spk.geometry.attributes.position.array;
     for (let i = 0; i < sparks; i++) { const d = sv[i], tt = Math.min(age, 1.2) * (.6 + d[3] * .7); sa[i * 3] = d[0] * tt; sa[i * 3 + 1] = Math.max(0, d[1] * tt - 9.81 * tt * tt * .35); sa[i * 3 + 2] = d[2] * tt; }
     spk.geometry.attributes.position.needsUpdate = true; spk.material.opacity = Math.max(0, 1 - age / 1.3);
+    const ea = emb.geometry.attributes.position.array;
+    for (let i = 0; i < ev.length; i++) { const d = ev[i], tt = age * (.8 + d[3] * .5); ea[i * 3] = d[0] * tt; ea[i * 3 + 1] = Math.max(.1, d[1] * tt - 9.81 * tt * tt * .5); ea[i * 3 + 2] = d[2] * tt; }
+    emb.geometry.attributes.position.needsUpdate = true; emb.material.opacity = Math.max(0, 1 - u * 1.1); emb.material.size = .3 * (1 - u * .5);
+    const aa = ash.geometry.attributes.position.array;
+    for (let i = 0; i < av.length; i++) { const d = av[i]; aa[i * 3] = d[0] + Math.sin(age * 2 + i) * .3; aa[i * 3 + 1] = d[1] + age * d[3] * 2.5; aa[i * 3 + 2] = d[2] + Math.cos(age * 1.7 + i) * .3; }
+    ash.geometry.attributes.position.needsUpdate = true; ash.material.opacity = Math.max(0, .9 - u);
     if (shock) { const su = clamp(age / 1.0, 0, 1); shock.scale.setScalar(.5 + su * size * 4); shock.material.opacity = (1 - su) * .35; shock.visible = su < 1; }
     flash.intensity = size * 60 * Math.max(0, 1 - age * 3);
   };
@@ -830,6 +841,8 @@ export function waterColumn(r, { height = 9, radius = .9, duration = 2.4, drops 
   const dv = []; for (let i = 0; i < drops; i++) { const a = r() * 6.283, sp = radius * (1.5 + r() * 4), up = height * (.9 + r() * .5); dv.push([Math.cos(a) * sp, up, Math.sin(a) * sp, r() * .3]); }
   const foam = new THREE.Mesh(new THREE.RingGeometry(.6, 1, 40), new THREE.MeshBasicMaterial({ color: '#dfe8f0', transparent: true, side: THREE.DoubleSide, depthWrite: false }));
   foam.rotation.x = -Math.PI / 2; foam.position.y = .06; g.add(foam);
+  const ripples = [];
+  for (let i = 0; i < 2; i++) { const rp = new THREE.Mesh(new THREE.RingGeometry(.95, 1, 48), new THREE.MeshBasicMaterial({ color: '#cfdbe6', transparent: true, side: THREE.DoubleSide, depthWrite: false })); rp.rotation.x = -Math.PI / 2; rp.position.y = .04; g.add(rp); ripples.push(rp); }
   const spray = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 16, 1, true), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: .25, side: THREE.DoubleSide, depthWrite: false })); spray.castShadow = false; g.add(spray);
   g.visible = false;
   g.userData.at = age => {
@@ -839,15 +852,16 @@ export function waterColumn(r, { height = 9, radius = .9, duration = 2.4, drops 
     const rise = easeOut(clamp(age / .9, 0, 1));                    // Säule schießt hoch
     const fall = clamp((age - .9) / (duration - .9), 0, 1);           // und sinkt zusammen
     const h = height * rise * (1 - fall * .85);
-    col.scale.set(radius * (1 + fall * 1.2), Math.max(.01, h), radius * (1 + fall * 1.2)); col.position.y = h / 2;
-    col.material.opacity = 1; col.visible = h > .1;
+    col.scale.set(radius * (1 + fall * .4), Math.max(.01, h), radius * (1 + fall * .4)); col.position.y = h / 2;
+    col.material.opacity = .92 * (1 - fall * .7); col.visible = h > .1;
     const cr = clamp((age - .5) / 1.0, 0, 1);
     crown.position.y = h; crown.visible = cr > 0 && fall < .9;
     for (const b of crown.children) { const k = b.userData.k, s = radius * (.25 + cr * .7) * k * (1 - fall * .6); b.scale.set(Math.max(.01, s), Math.max(.01, s * b.userData.e), Math.max(.01, s)); b.position.set(Math.cos(b.userData.a) * radius * (.3 + cr * 1.1) * k, -cr * radius * .5 - s * .3, Math.sin(b.userData.a) * radius * (.3 + cr * 1.1) * k); }
     const pa = geo.attributes.position.array;
     for (let i = 0; i < drops; i++) { const d = dv[i], tt = Math.max(0, age - .4 - d[3]); pa[i * 3] = d[0] * tt * .6; pa[i * 3 + 1] = Math.max(0, d[1] * tt - 9.81 * tt * tt * .5); pa[i * 3 + 2] = d[2] * tt * .6; }
     geo.attributes.position.needsUpdate = true; pts.material.opacity = age > .4 ? .95 * (1 - u) : 0;
-    const fu = clamp(age / 1.6, 0, 1); foam.scale.setScalar(radius * (1 + fu * 3.5)); foam.material.opacity = (1 - fu) * .5;
+    const fu = clamp(age / 1.6, 0, 1); foam.scale.setScalar(radius * (1 + fu * 2.5)); foam.material.opacity = (1 - fu) * .3;
+    ripples.forEach((rp, i) => { const ru = clamp((age - .3 - i * .5) / 1.8, 0, 1); rp.visible = ru > 0 && ru < 1; rp.scale.setScalar(radius * (1.5 + ru * 4.5)); rp.material.opacity = (1 - ru) * .18; });
     spray.scale.set(radius * (1.0 + rise * .8), Math.max(.01, h * .5), radius * (1.0 + rise * .8)); spray.position.y = h * .3; spray.rotation.x = Math.PI; spray.material.opacity = .07 * (1 - fall);
   };
   return g;
