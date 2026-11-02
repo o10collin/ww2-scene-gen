@@ -759,6 +759,100 @@ export function explosion({ color = P.orange, smoke = P.darkGrey, size = 1, dura
   return g;
 }
 
+// Detaillierter Feuerball: Kugelcluster (gelb -> orange -> Rauch), Trümmer auf Wurfbahnen, Funken, Druckwellenring, Blitz
+export function fireball(r, { size = 2.5, duration = 2.6, debris = 60, sparks = 120, ring = true } = {}) {
+  const g = new THREE.Group();
+  const balls = [];
+  for (let i = 0; i < 9; i++) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 9), new THREE.MeshLambertMaterial({ color: '#ffb347', emissive: '#ff8a2a', emissiveIntensity: 1 }));
+    m.castShadow = false; m.scale.set(1, .85 + r() * .3, 1);
+    const a = r() * Math.PI * 2, e = r() * Math.PI;
+    balls.push({ m, dir: new THREE.Vector3(Math.sin(e) * Math.cos(a), Math.abs(Math.cos(e)) * .9 + .2, Math.sin(e) * Math.sin(a)), k: .45 + r() * .55, delay: r() * .18, spin: r() * 4 });
+    g.add(m);
+  }
+  const core = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), glowMat('#fff2b0', 2.4)); core.castShadow = false; g.add(core);
+  const mkPoints = (n, color, sz, op) => {
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+    const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color, size: sz, transparent: true, opacity: op, depthWrite: false }));
+    pts.material.toneMapped = false; return pts;
+  };
+  const deb = mkPoints(debris, '#2a2420', .22, .95), spk = mkPoints(sparks, '#ffd080', .09, 1);
+  const dv = [], sv = [];
+  for (let i = 0; i < debris; i++) { const a = r() * 6.283, e = .3 + r() * 1.1, sp = size * (2 + r() * 4); dv.push([Math.cos(a) * Math.cos(e) * sp, Math.sin(e) * sp, Math.sin(a) * Math.cos(e) * sp, r()]); }
+  for (let i = 0; i < sparks; i++) { const a = r() * 6.283, e = r() * 1.5, sp = size * (3 + r() * 6); sv.push([Math.cos(a) * Math.cos(e) * sp, Math.sin(e) * sp, Math.sin(a) * Math.cos(e) * sp, r()]); }
+  g.add(deb, spk);
+  const shock = ring ? new THREE.Mesh(new THREE.RingGeometry(.9, 1, 48), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, side: THREE.DoubleSide, depthWrite: false })) : null;
+  if (shock) { shock.rotation.x = -Math.PI / 2; shock.position.y = .05; g.add(shock); }
+  const flash = new THREE.PointLight('#ffb060', 0, size * 14, 1.5); g.add(flash);
+  const cFire = new THREE.Color('#ffb347'), cHot = new THREE.Color('#fff2b0'), cSmoke = new THREE.Color('#2b2724');
+  g.visible = false;
+  g.userData.at = age => {
+    if (age < 0 || age > duration) { g.visible = false; flash.intensity = 0; return; }
+    g.visible = true;
+    const u = age / duration;
+    for (const b of balls) {
+      const bu = clamp((age - b.delay) / (duration - b.delay), 0, 1);
+      const grow = easeOut(bu * 1.6);
+      const rad = size * b.k * (0.18 + grow * .55) * (1 - bu * .3);
+      b.m.scale.set(Math.max(.001, rad), Math.max(.001, rad * (.85 + (b.k - .45) * .5)), Math.max(.001, rad));
+      b.m.position.copy(b.dir).multiplyScalar(size * grow * .7).add(new THREE.Vector3(0, size * bu * bu * 1.6, 0));
+      b.m.rotation.y = b.spin * bu;
+      const col = bu < .25 ? cHot.clone().lerp(cFire, bu / .25) : cFire.clone().lerp(cSmoke, Math.pow((bu - .25) / .75, .7));
+      b.m.material.color.copy(col).multiplyScalar(.75);
+      b.m.material.emissive.copy(col).multiplyScalar(bu < .3 ? 1.3 : Math.max(0, 1 - bu * 1.4));
+      b.m.visible = bu > 0;
+    }
+    const cu = clamp(age / .5, 0, 1);
+    core.scale.setScalar(Math.max(.001, size * .55 * Math.sin(cu * Math.PI)));
+    core.visible = cu < 1;
+    const pa = deb.geometry.attributes.position.array;
+    for (let i = 0; i < debris; i++) { const d = dv[i], tt = age * (.7 + d[3] * .6); pa[i * 3] = d[0] * tt; pa[i * 3 + 1] = Math.max(0, d[1] * tt - 9.81 * tt * tt * .5); pa[i * 3 + 2] = d[2] * tt; }
+    deb.geometry.attributes.position.needsUpdate = true; deb.material.opacity = .95 * (1 - u);
+    const sa = spk.geometry.attributes.position.array;
+    for (let i = 0; i < sparks; i++) { const d = sv[i], tt = Math.min(age, 1.2) * (.6 + d[3] * .7); sa[i * 3] = d[0] * tt; sa[i * 3 + 1] = Math.max(0, d[1] * tt - 9.81 * tt * tt * .35); sa[i * 3 + 2] = d[2] * tt; }
+    spk.geometry.attributes.position.needsUpdate = true; spk.material.opacity = Math.max(0, 1 - age / 1.3);
+    if (shock) { const su = clamp(age / 1.0, 0, 1); shock.scale.setScalar(.5 + su * size * 4); shock.material.opacity = (1 - su) * .35; shock.visible = su < 1; }
+    flash.intensity = size * 60 * Math.max(0, 1 - age * 3);
+  };
+  return g;
+}
+
+// Wassersäule: aufsteigende Säule, Gischtkrone, zurückfallende Tropfen, Schaumring auf dem Wasser
+export function waterColumn(r, { height = 9, radius = .9, duration = 2.4, drops = 140 } = {}) {
+  const g = new THREE.Group();
+  const white = new THREE.MeshLambertMaterial({ color: '#dfe9f2', transparent: true, opacity: .92 });
+  const col = new THREE.Mesh(new THREE.CylinderGeometry(.3, .9, 1, 14, 1, true), white); col.castShadow = false; g.add(col);
+  const crown = new THREE.Group();
+  for (let i = 0; i < 11; i++) { const b = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 8), white); b.castShadow = false; b.userData.a = i / 11 * 6.283 + r() * .5; b.userData.k = .5 + r() * .8; b.userData.e = .6 + r() * .9; b.scale.set(1, .6 + r() * .6, 1); crown.add(b); }
+  g.add(crown);
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(drops * 3), 3));
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: '#f4f8ff', size: .16, transparent: true, opacity: .95, depthWrite: false })); pts.material.toneMapped = false; g.add(pts);
+  const dv = []; for (let i = 0; i < drops; i++) { const a = r() * 6.283, sp = radius * (1.5 + r() * 4), up = height * (.9 + r() * .5); dv.push([Math.cos(a) * sp, up, Math.sin(a) * sp, r() * .3]); }
+  const foam = new THREE.Mesh(new THREE.RingGeometry(.6, 1, 40), new THREE.MeshBasicMaterial({ color: '#dfe8f0', transparent: true, side: THREE.DoubleSide, depthWrite: false }));
+  foam.rotation.x = -Math.PI / 2; foam.position.y = .06; g.add(foam);
+  const spray = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 16, 1, true), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: .25, side: THREE.DoubleSide, depthWrite: false })); spray.castShadow = false; g.add(spray);
+  g.visible = false;
+  g.userData.at = age => {
+    if (age < 0 || age > duration) { g.visible = false; return; }
+    g.visible = true;
+    const u = age / duration;
+    const rise = easeOut(clamp(age / .9, 0, 1));                    // Säule schießt hoch
+    const fall = clamp((age - .9) / (duration - .9), 0, 1);           // und sinkt zusammen
+    const h = height * rise * (1 - fall * .85);
+    col.scale.set(radius * (1 + fall * 1.2), Math.max(.01, h), radius * (1 + fall * 1.2)); col.position.y = h / 2;
+    col.material.opacity = 1; col.visible = h > .1;
+    const cr = clamp((age - .5) / 1.0, 0, 1);
+    crown.position.y = h; crown.visible = cr > 0 && fall < .9;
+    for (const b of crown.children) { const k = b.userData.k, s = radius * (.25 + cr * .7) * k * (1 - fall * .6); b.scale.set(Math.max(.01, s), Math.max(.01, s * b.userData.e), Math.max(.01, s)); b.position.set(Math.cos(b.userData.a) * radius * (.3 + cr * 1.1) * k, -cr * radius * .5 - s * .3, Math.sin(b.userData.a) * radius * (.3 + cr * 1.1) * k); }
+    const pa = geo.attributes.position.array;
+    for (let i = 0; i < drops; i++) { const d = dv[i], tt = Math.max(0, age - .4 - d[3]); pa[i * 3] = d[0] * tt * .6; pa[i * 3 + 1] = Math.max(0, d[1] * tt - 9.81 * tt * tt * .5); pa[i * 3 + 2] = d[2] * tt * .6; }
+    geo.attributes.position.needsUpdate = true; pts.material.opacity = age > .4 ? .95 * (1 - u) : 0;
+    const fu = clamp(age / 1.6, 0, 1); foam.scale.setScalar(radius * (1 + fu * 3.5)); foam.material.opacity = (1 - fu) * .5;
+    spray.scale.set(radius * (1.0 + rise * .8), Math.max(.01, h * .5), radius * (1.0 + rise * .8)); spray.position.y = h * .3; spray.rotation.x = Math.PI; spray.material.opacity = .07 * (1 - fall);
+  };
+  return g;
+}
+
 export function smokeColumn(r, { color = P.darkGrey, height = 8, n = 9, width = .8 } = {}) {
   const g = new THREE.Group();
   const puffs = [];

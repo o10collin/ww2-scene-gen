@@ -12,7 +12,9 @@ export default {
     planes: { type: 'number', min: 1, max: 14, step: 1, value: 7, label: 'Flugzeuge' },
     attackSpeed: { type: 'number', min: .5, max: 2, step: .05, value: 1, label: 'Angriffstempo' },
     explosionSize: { type: 'number', min: .5, max: 5, step: .1, value: 2.2, label: 'Explosionsgröße' },
-    splashes: { type: 'number', min: 0, max: 20, step: 1, value: 8, label: 'Wassersäulen' },
+    splashes: { type: 'number', min: 0, max: 24, step: 1, value: 10, label: 'Wassersäulen' },
+    splashHeight: { type: 'number', min: 3, max: 20, step: .5, value: 9, label: 'Höhe Wassersäulen' },
+    debris: { type: 'number', min: 0, max: 200, step: 10, value: 70, label: 'Trümmer je Explosion' },
     skyColor: { type: 'color', value: '#101722', label: 'Himmel' },
     waterColor: { type: 'color', value: '#1c2d3e', label: 'Wasser' },
     planeColor: { type: 'color', value: '#cfcac0', label: 'Flugzeugfarbe' },
@@ -48,17 +50,17 @@ export default {
       const b = new THREE.Vector3(target.x, 3.5 + r() * 1.5, target.z);
       const c = new THREE.Vector3(50, 16 + r() * 8, 20 + r() * 20);
       const curve = new THREE.QuadraticBezierCurve3(a, b, c);
-      const boom = H.explosion({ size: p.explosionSize, duration: 1.8 });
-      boom.position.copy(target).setY(1.5); scene.add(boom);
+      const boom = H.fireball(r, { size: p.explosionSize, duration: 2.6, debris: p.debris, sparks: 120 });
+      boom.position.copy(target).setY(1.4); scene.add(boom);
       const smoke = H.smokeColumn(r, { height: 10, width: .9 }); smoke.position.copy(target).setY(2); smoke.visible = false; scene.add(smoke);
       planes.push({ m, curve, t0, dur: 3.4 / p.attackSpeed, boom, smoke, bank: (r() - .5) * .8 });
     }
     // Wassersäulen (verfehlte Bomben)
     const splashes = [];
     for (let i = 0; i < p.splashes; i++) {
-      const s = H.cone(.8, 4, P.white, 8); s.castShadow = false;
-      s.position.set(-24 + r() * 44, 0, -14 + r() * 24); scene.add(s);
-      splashes.push({ s, t0: 1 + r() * 6 });
+      const s = H.waterColumn(r, { height: p.splashHeight * (.7 + r() * .6), radius: .7 + r() * .6, duration: 2.6, drops: 140 });
+      s.position.set(-26 + r() * 48, .25, -14 + r() * 26); scene.add(s);
+      splashes.push({ s, t0: .6 + r() * 6.4 });
     }
     const tmp = new THREE.Vector3();
     if (p.details) {
@@ -77,14 +79,14 @@ export default {
       }
       for (let i = 0; i < 10; i++) { const pm = H.palm(3 + r() * 2); pm.position.set(-44 + i * 9 + r() * 3, 0, -36 - r() * 6); scene.add(pm); }
       const fires = [];
-      for (let i = 0; i < 3; i++) { const f = H.explosion({ size: 1.2, color: '#ff7a1a', smoke: '#222', duration: 1.3 }); f.position.set(-10 + r() * 24, .3, -4 + r() * 10); scene.add(f); fires.push({ f, t0: 2.5 + r() * 2 }); }
+      for (let i = 0; i < 3; i++) { const f = H.fireball(r, { size: 1.0, duration: 1.6, debris: 20, sparks: 60, ring: false }); f.position.set(-10 + r() * 24, .3, -4 + r() * 10); scene.add(f); fires.push({ f, t0: 2.5 + r() * 2 }); }
       scene.userData.fires = fires;
     }
 
     return {
       update(t) {
         water.userData.at(t);
-        for (const fr of scene.userData.fires || []) { const a = t - fr.t0; fr.f.userData.at(a > 0 ? a % 1.3 : -1); }
+        for (const fr of scene.userData.fires || []) { const a = t - fr.t0; fr.f.userData.at(a > 0 ? a % 1.6 : -1); }
         for (const pl of planes) {
           const u = H.span(t, pl.t0, pl.t0 + pl.dur);
           pl.m.visible = u > 0 && u < 1;
@@ -96,11 +98,7 @@ export default {
           const sm = t - (pl.t0 + pl.dur * .5);
           pl.smoke.visible = sm > 0; if (sm > 0) pl.smoke.userData.at(sm, .5);
         }
-        for (const sp of splashes) {
-          const age = t - sp.t0;
-          const k = age < 0 || age > 1.4 ? 0 : Math.sin(age / 1.4 * Math.PI);
-          sp.s.scale.set(k + .001, k + .001, k + .001); sp.s.position.y = k * 2;
-        }
+        for (const sp of splashes) sp.s.userData.at(t - sp.t0);
       }
     };
   }
