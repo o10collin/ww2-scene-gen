@@ -138,6 +138,8 @@ bildgenau reproduzierbar bleibt.
 
 `js/common.js` enthält die Bausteine: Figuren, Panzer, Flugzeuge, Schiffe, Landungsboote, Gebäude,
 Ruinen, Städte, Bäume, Wolken, Pfeile, Europakarte (`europeMap`), Globus mit Bögen (`globe`),
-Explosionen (`explosion` einfach, `fireball` mit Feuerkugeln, Flammenzungen, Nachzündungen, Rauchpilz, Trümmern,
-Funken, Glut und Druckwelle), Dauerbrände (`flame`), Wassersäulen (`waterColumn`), Rauchsäulen, Partikel (Schnee, Staub, Sterne), Flaggen, Tisch und Dokument mit
+Explosionen (`explosion` klein, `fireball` groß), Dauerbrände (`flame`), Wassersäulen (`waterColumn`) und Rauchsäulen
+(`smokeColumn`) als Sprite-Partikelsysteme (`emitter`: weiche prozedurale Rauch-, Feuer- und Gischttexturen auf hunderten
+Billboards, Bewegung, Wachstum, Farbverlauf und Ausblenden laufen im Shader aus dem Alter, daher bildgenau reproduzierbar),
+Partikel (Schnee, Staub, Sterne), Flaggen, Tisch und Dokument mit
 Unterschrift, Wasser mit Wellen sowie Easing-Funktionen.
