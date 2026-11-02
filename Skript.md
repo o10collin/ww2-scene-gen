@@ -12,6 +12,6 @@ Im Juni 1944 landen die Westalliierten in der Normandie. Während sie 1945 von W
 
 Hitler nimmt sich am 30. April 1945 durch einen Pistolenschuss in die rechte Schläfe dann endgültig das Leben.
 
-Am 8. Mai kapitulierte Deutschland und setzte dem Zweiten Weltkrieg in Europa ein Ende.
+Am 8. Mai kapituliert Deutschland und setzt dem Zweiten Weltkrieg in Europa ein Ende.
 
-Obwohl Deutschland den Krieg verlor, kämpfte Japan weiter. Daraufhin werfen die USA zwei Atombomben auf Japan. Eine auf Hiroshima, die andere auf Nagasaki. Zehntausende sterben. Am 2. September kapituliert dann schließlich auch Japan.
+Obwohl Deutschland den Krieg verliert, kämpft Japan weiter. Daraufhin werfen die USA zwei Atombomben auf Japan. Eine auf Hiroshima, die andere auf Nagasaki. Zehntausende sterben. Am 2. September kapituliert dann schließlich auch Japan.
