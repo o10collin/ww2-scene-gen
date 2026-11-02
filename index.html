@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>WW2 Szenen Studio</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.min.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<header class="topbar">
+  <button id="toggle-left" class="icon" title="Szenenliste ein/aus">☰</button>
+  <div class="brand">WW2 Szenen Studio <span class="sub">Von der Kriegswende zur Kapitulation</span></div>
+  <div class="spacer"></div>
+  <div id="res" class="mono">1920 × 1080</div>
+  <button id="toggle-right" class="icon" title="Einstellungen ein/aus">⚙</button>
+</header>
+
+<aside class="left">
+  <h2>Szenen</h2>
+  <ul id="scene-list"></ul>
+</aside>
+
+<main class="center">
+  <div class="stage">
+    <canvas id="out" width="1920" height="1080"></canvas>
+  </div>
+  <div class="info">
+    <div id="scene-title" class="scene-title"></div>
+    <p id="script-text" class="script"></p>
+  </div>
+  <div class="transport">
+    <button id="prev" class="btn ghost" title="Vorherige Szene (Bild auf)">⇤</button>
+    <button id="frame-back" class="btn ghost" title="Ein Bild zurück (←)">◂</button>
+    <button id="play" class="btn primary" title="Abspielen / Pause (Leertaste)">▶</button>
+    <button id="stop" class="btn ghost" title="Stopp, zurück auf 0">■</button>
+    <button id="frame-fwd" class="btn ghost" title="Ein Bild vor (→)">▸</button>
+    <button id="next" class="btn ghost" title="Nächste Szene (Bild ab)">⇥</button>
+    <input id="timeline" type="range" min="0" max="1000" value="0">
+    <span id="time" class="mono">0.00 / 0.0 s</span>
+    <label class="inline"><input id="loop" type="checkbox" checked> Schleife</label>
+    <label class="inline">Tempo
+      <select id="speed">
+        <option value="0.25">0,25×</option><option value="0.5">0,5×</option><option value="1" selected>1×</option><option value="2">2×</option>
+      </select>
+    </label>
+  </div>
+  <div id="status" class="status">Bereit.</div>
+</main>
+
+<aside class="right">
+  <h2>Szene</h2>
+  <div id="scene-gui"></div>
+  <h2>Global</h2>
+  <div id="global-gui"></div>
+</aside>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
