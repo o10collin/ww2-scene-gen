@@ -94,6 +94,8 @@ Sterben, Knien, Beten, Weinen, Salutieren). Die Clips werden beim Laden auf das 
 
 In Szenen: `H.figure({ model: 'soldier' | 'civil' | 'suit' | 'worker', pose: 'Male_Writing_While_Seated', glow: H.ROLE.west })`;
 `userData.walk(t, amp)` lässt gehen (amp > 1.1 rennen), `userData.pose(name, t)` spielt einen beliebigen Clip aus `H.CLIP_NAMES`.
+Wurzelbewegung der Clips (Mixamo-Clips, die nicht „in place“ sind) wird beim Laden herausgerechnet, damit Loops nicht zurückspringen;
+die Position der Figur steuert immer die Szene.
 Eigene Clips: Mixamo-Animation als GLB (nur Skelett) nach `assets/models/anim/` legen und in `CLIP_NAMES` eintragen.
 
 ## Texte abschalten
@@ -136,5 +138,6 @@ bildgenau reproduzierbar bleibt.
 
 `js/common.js` enthält die Bausteine: Figuren, Panzer, Flugzeuge, Schiffe, Landungsboote, Gebäude,
 Ruinen, Städte, Bäume, Wolken, Pfeile, Europakarte (`europeMap`), Globus mit Bögen (`globe`),
-Explosionen, Rauchsäulen, Partikel (Schnee, Staub, Sterne), Flaggen, Tisch und Dokument mit
+Explosionen (`explosion` einfach, `fireball` mit Feuerkugeln, Flammenzungen, Nachzündungen, Rauchpilz, Trümmern,
+Funken, Glut und Druckwelle), Dauerbrände (`flame`), Wassersäulen (`waterColumn`), Rauchsäulen, Partikel (Schnee, Staub, Sterne), Flaggen, Tisch und Dokument mit
 Unterschrift, Wasser mit Wellen sowie Easing-Funktionen.

@@ -144,12 +144,14 @@ export const CLIP_NAMES = ['Standing_Idle_Loop', 'Standing_Idle', 'Walking', 'Ru
   'Lifting_A_Heavy_Object_With_Both_Hands', 'Carrying_A_Box', 'Pushing_Heavy_Object', 'Digging_Hole_With_Shovel',
   'Dying_Falling_Forward', 'Laying_On_The_Ground_Dying', 'Falling_Back_Death', 'Kneeling_Idle', 'Kneeling_In_Prayer', 'Injured_Walking', 'Injured_Standard_Idle', 'Standing_Praying_While_Swaying', 'Crying_And_Rubbing_Eyes'];
 const ONESHOT = n => /Dying|Death|Salute|Pointing_Onward|Stepping_Forward/.test(n);
+const BROKEN_HIPS = n => n === 'Walking';   // Hüftspur dieses Clips liegt auf Bodenhöhe
 const ROLE_CLIPS = {
   soldier: { idle: 'Rifle_Idle', walk: 'Rifle_Walk_Forward', run: 'Rifle_Run_Forward' },
   civil: { idle: 'Standing_Idle_Loop', walk: 'Walking', run: 'Running_Fast' }
 };
 export const MODELS = {};
 export const CLIPS = {};
+let CLIP_HIP_Y = null;
 let CLIP_HIP_REST = 1;
 let figureMode = 'glb';           // 'glb' | 'capsule'
 let labelsOn = true;
@@ -203,6 +205,7 @@ export async function preloadModels(onProgress) {
   const ref = CLIPS['Standing_Idle_Loop'] || Object.values(CLIPS)[0];
   const tr = ref?.tracks.find(t => t.name === 'Hips.position');
   CLIP_HIP_REST = tr ? Math.hypot(tr.values[0], tr.values[1], tr.values[2]) || 1 : 1;
+  CLIP_HIP_Y = tr ? [tr.values[0], tr.values[1], tr.values[2]] : null;
   return MODELS;
 }
 // Clip an Modell anpassen (Hüftposition skalieren), gecacht
@@ -219,6 +222,14 @@ function clipFor(M, name) {
     if (bone !== 'Hips') continue;
     const a = tr.values;
     if (prop === 'position') {
+      const n = a.length / 3, times = tr.times;
+      if (BROKEN_HIPS(name) && CLIP_HIP_Y) for (let i = 0; i < n; i++) { a[i * 3] = CLIP_HIP_Y[0]; a[i * 3 + 1] = CLIP_HIP_Y[1]; a[i * 3 + 2] = CLIP_HIP_Y[2]; }
+      if (!ONESHOT(name) && n > 1) {
+        // Wurzelbewegung entfernen: lineare Drift zwischen erstem und letztem Bild abziehen, damit Loops nicht zurückspringen
+        const span = times[n - 1] - times[0] || 1;
+        const d = [a[(n - 1) * 3] - a[0], a[(n - 1) * 3 + 1] - a[1], a[(n - 1) * 3 + 2] - a[2]];
+        for (let i = 0; i < n; i++) { const f = (times[i] - times[0]) / span; a[i * 3] -= d[0] * f; a[i * 3 + 1] -= d[1] * f; a[i * 3 + 2] -= d[2] * f; }
+      }
       for (let i = 0; i < a.length; i += 3) { v.set(a[i] * k, a[i + 1] * k, a[i + 2] * k).applyQuaternion(M.preInv); a[i] = v.x; a[i + 1] = v.y; a[i + 2] = v.z; }
     } else if (prop === 'quaternion') {
       for (let i = 0; i < a.length; i += 4) { q.set(a[i], a[i + 1], a[i + 2], a[i + 3]).premultiply(M.preInv); a[i] = q.x; a[i + 1] = q.y; a[i + 2] = q.z; a[i + 3] = q.w; }
@@ -759,57 +770,126 @@ export function explosion({ color = P.orange, smoke = P.darkGrey, size = 1, dura
   return g;
 }
 
-// Detaillierter Feuerball: Kugelcluster (gelb -> orange -> Rauch), Trümmer auf Wurfbahnen, Funken, Druckwellenring, Blitz
-export function fireball(r, { size = 2.5, duration = 2.6, debris = 60, sparks = 120, ring = true } = {}) {
+// Detaillierter Feuerball in Phasen: Blitz -> Feuerkugeln mit Flackern und Flammenzungen -> Nachzündungen ->
+// Rauchpilz, der weiter aufsteigt, während das Feuer erlischt. Dazu Trümmerbrocken, Funken, Glut, Asche, Druckwellenring.
+const tmpV = new THREE.Vector3();
+export function fireball(r, { size = 2.5, duration = 3.2, debris = 60, sparks = 120, ring = true } = {}) {
   const g = new THREE.Group();
+  const fireEnd = duration * .5;                                   // ab hier nur noch Rauch
+  const cFire = new THREE.Color('#ffb347'), cHot = new THREE.Color('#fff2b0'), cDeep = new THREE.Color('#c8471e'), cSmoke = new THREE.Color('#2b2724');
+  const fireMat = () => new THREE.MeshLambertMaterial({ color: '#ffb347', emissive: '#ff8a2a', emissiveIntensity: 1 });
+  // Feuerkugeln: innerer heller Kern, äußere dunklere Kugeln
   const balls = [];
+  for (let i = 0; i < 13; i++) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 9), fireMat()); m.castShadow = false;
+    const a = r() * Math.PI * 2, e = r() * Math.PI, inner = i < 5;
+    balls.push({ m, dir: new THREE.Vector3(Math.sin(e) * Math.cos(a), Math.abs(Math.cos(e)) * .9 + .2, Math.sin(e) * Math.sin(a)), k: inner ? .5 + r() * .4 : .35 + r() * .45, reach: inner ? .35 : .7, delay: inner ? r() * .08 : .08 + r() * .2, spin: r() * 4, fl: r() * 6.28, tint: .85 + r() * .15 });
+    g.add(m);
+  }
+  // Flammenzungen: schießen nach oben und erlöschen schnell
+  const tongues = [];
+  for (let i = 0; i < 6; i++) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 7), fireMat()); m.castShadow = false;
+    tongues.push({ m, dir: new THREE.Vector3((r() - .5) * .8, 1, (r() - .5) * .8).normalize(), delay: .05 + r() * .25, len: 1.6 + r() * 1.4, k: .18 + r() * .18 });
+    g.add(m);
+  }
+  // Nachzündungen: kleine helle Kugeln, die kurz aufblitzen
+  const pops = [];
+  for (let i = 0; i < 4; i++) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 8), glowMat('#fff0c0', 1.5)); m.castShadow = false;
+    pops.push({ m, t0: .3 + r() * .9, pos: new THREE.Vector3((r() - .5) * size * 1.0, size * (.3 + r() * .7), (r() - .5) * size * 1.0), k: .07 + r() * .09 });
+    g.add(m);
+  }
+  // Rauchpilz: dunkle Kugeln, die nach oben treiben und sich ausbreiten
+  const smokes = [];
   for (let i = 0; i < 9; i++) {
-    const m = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 9), new THREE.MeshLambertMaterial({ color: '#ffb347', emissive: '#ff8a2a', emissiveIntensity: 1 }));
-    m.castShadow = false; m.scale.set(1, .85 + r() * .3, 1);
-    const a = r() * Math.PI * 2, e = r() * Math.PI;
-    balls.push({ m, dir: new THREE.Vector3(Math.sin(e) * Math.cos(a), Math.abs(Math.cos(e)) * .9 + .2, Math.sin(e) * Math.sin(a)), k: .45 + r() * .55, delay: r() * .18, spin: r() * 4 });
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1, 9, 7), new THREE.MeshLambertMaterial({ color: '#2a2624', transparent: true, opacity: .45 })); m.castShadow = false;
+    const a = r() * 6.283;
+    smokes.push({ m, dx: Math.cos(a) * (.3 + r() * .7), dz: Math.sin(a) * (.3 + r() * .7), delay: .15 + r() * .6, k: .18 + r() * .26, rise: .6 + r() * .6, wob: r() * 6.28 });
     g.add(m);
   }
   const core = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), glowMat('#fff2b0', 2.4)); core.castShadow = false; g.add(core);
+  // Trümmerbrocken als kleine rotierende Klötze
+  const chunks = [];
+  for (let i = 0; i < 10; i++) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial({ color: '#2a2622' })); m.castShadow = false;
+    const a = r() * 6.283, e = .5 + r() * .9, sp = size * (2 + r() * 3);
+    chunks.push({ m, v: [Math.cos(a) * Math.cos(e) * sp, Math.sin(e) * sp, Math.sin(a) * Math.cos(e) * sp], s: size * (.05 + r() * .07), rot: [r() * 8, r() * 8, r() * 8], sp: .7 + r() * .5 });
+    g.add(m);
+  }
   const mkPoints = (n, color, sz, op) => {
-    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(Math.max(1, n) * 3), 3));
     const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color, size: sz, transparent: true, opacity: op, depthWrite: false }));
     pts.material.toneMapped = false; return pts;
   };
-  const deb = mkPoints(debris, '#2a2420', .22, .95), spk = mkPoints(sparks, '#ffd080', .09, 1);
-  const emb = mkPoints(Math.max(8, debris >> 2), '#ff7a1a', .3, 1), ash = mkPoints(sparks >> 1, '#ff9a3a', .07, .9);
-  const ev = [], av = [];
-  for (let i = 0; i < Math.max(8, debris >> 2); i++) { const a = r() * 6.283, e = .5 + r() * .9, sp = size * (2.5 + r() * 3); ev.push([Math.cos(a) * Math.cos(e) * sp, Math.sin(e) * sp, Math.sin(a) * Math.cos(e) * sp, r()]); }
-  for (let i = 0; i < (sparks >> 1); i++) av.push([(r() - .5) * size * 1.6, r() * size * 1.5, (r() - .5) * size * 1.6, .4 + r() * 1.2]);
-  g.add(emb, ash);
-  const dv = [], sv = [];
+  const nEmb = Math.max(8, debris >> 2), nAsh = Math.max(8, sparks >> 1);
+  const deb = mkPoints(debris, '#2a2420', .2, .95), spk = mkPoints(sparks, '#ffd080', .08, 1);
+  const emb = mkPoints(nEmb, '#ff7a1a', .26, 1), ash = mkPoints(nAsh, '#8a7a68', .07, .7);
+  const dv = [], sv = [], ev = [], av = [];
   for (let i = 0; i < debris; i++) { const a = r() * 6.283, e = .3 + r() * 1.1, sp = size * (2 + r() * 4); dv.push([Math.cos(a) * Math.cos(e) * sp, Math.sin(e) * sp, Math.sin(a) * Math.cos(e) * sp, r()]); }
   for (let i = 0; i < sparks; i++) { const a = r() * 6.283, e = r() * 1.5, sp = size * (3 + r() * 6); sv.push([Math.cos(a) * Math.cos(e) * sp, Math.sin(e) * sp, Math.sin(a) * Math.cos(e) * sp, r()]); }
-  g.add(deb, spk);
+  for (let i = 0; i < nEmb; i++) { const a = r() * 6.283, e = .5 + r() * .9, sp = size * (2.5 + r() * 3); ev.push([Math.cos(a) * Math.cos(e) * sp, Math.sin(e) * sp, Math.sin(a) * Math.cos(e) * sp, r()]); }
+  for (let i = 0; i < nAsh; i++) av.push([(r() - .5) * size * 1.6, r() * size * 1.5, (r() - .5) * size * 1.6, .4 + r() * 1.2]);
+  g.add(deb, spk, emb, ash);
   const shock = ring ? new THREE.Mesh(new THREE.RingGeometry(.9, 1, 48), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, side: THREE.DoubleSide, depthWrite: false })) : null;
   if (shock) { shock.rotation.x = -Math.PI / 2; shock.position.y = .05; g.add(shock); }
   const flash = new THREE.PointLight('#ffb060', 0, size * 14, 1.5); g.add(flash);
-  const cFire = new THREE.Color('#ffb347'), cHot = new THREE.Color('#fff2b0'), cSmoke = new THREE.Color('#2b2724');
+  const tmpC = new THREE.Color();
   g.visible = false;
   g.userData.at = age => {
     if (age < 0 || age > duration) { g.visible = false; flash.intensity = 0; return; }
     g.visible = true;
     const u = age / duration;
+    const flick = 1 + .18 * Math.sin(age * 37) + .12 * Math.sin(age * 59 + 1.3);
     for (const b of balls) {
-      const bu = clamp((age - b.delay) / (duration - b.delay), 0, 1);
-      const grow = easeOut(bu * 1.6);
-      const rad = size * b.k * (0.18 + grow * .55) * (1 - bu * .3);
+      const bu = clamp((age - b.delay) / (fireEnd - b.delay), 0, 1);
+      const grow = easeOut(bu * 1.4);
+      const rad = size * b.k * (.12 + grow * .45) * (1 - bu * bu * .9);
       b.m.scale.set(Math.max(.001, rad), Math.max(.001, rad * (.85 + (b.k - .45) * .5)), Math.max(.001, rad));
-      b.m.position.copy(b.dir).multiplyScalar(size * grow * .7).add(new THREE.Vector3(0, size * bu * bu * 1.6, 0));
+      b.m.position.copy(b.dir).multiplyScalar(size * grow * b.reach).add(tmpV.set(0, size * bu * bu * 1.2, 0));
       b.m.rotation.y = b.spin * bu;
-      const col = bu < .25 ? cHot.clone().lerp(cFire, bu / .25) : cFire.clone().lerp(cSmoke, Math.pow((bu - .25) / .75, .7));
-      b.m.material.color.copy(col).multiplyScalar(.75);
-      b.m.material.emissive.copy(col).multiplyScalar(bu < .3 ? 1.3 : Math.max(0, 1 - bu * 1.4));
-      b.m.visible = bu > 0;
+      const col = bu < .22 ? tmpC.copy(cHot).lerp(cFire, bu / .22) : tmpC.copy(cFire).lerp(cDeep, Math.pow((bu - .22) / .78, .8));
+      b.m.material.color.copy(col).multiplyScalar(.6 * b.tint);
+      b.m.material.emissive.copy(col).multiplyScalar((bu < .3 ? 1.3 : Math.max(.15, 1 - bu * 1.1)) * flick * b.tint);
+      b.m.visible = bu > 0 && bu < 1;
     }
-    const cu = clamp(age / .35, 0, 1);
+    for (const tg of tongues) {
+      const tu = clamp((age - tg.delay) / .55, 0, 1);
+      tg.m.visible = tu > 0 && tu < 1;
+      if (tg.m.visible) {
+        const s = size * tg.k * (1 - tu * .5);
+        tg.m.scale.set(s, s * tg.len * (1 + tu), s);
+        tg.m.position.copy(tg.dir).multiplyScalar(size * (.3 + easeOut(tu) * 1.2));
+        tg.m.lookAt(tmpV.copy(tg.m.position).add(tg.dir)); tg.m.rotateX(Math.PI / 2);
+        tmpC.copy(cHot).lerp(cFire, tu); tg.m.material.color.copy(tmpC).multiplyScalar(.8); tg.m.material.emissive.copy(tmpC).multiplyScalar((1.4 - tu * 1.2) * flick);
+      }
+    }
+    for (const pp of pops) {
+      const pu = clamp((age - pp.t0) / .3, 0, 1);
+      pp.m.visible = pu > 0 && pu < 1;
+      if (pp.m.visible) { pp.m.position.copy(pp.pos); pp.m.scale.setScalar(Math.max(.001, size * pp.k * Math.sin(pu * Math.PI))); }
+    }
+    for (const sm of smokes) {
+      const su = clamp((age - sm.delay) / (duration - sm.delay), 0, 1);
+      sm.m.visible = su > 0;
+      if (!sm.m.visible) continue;
+      const s = size * sm.k * (.3 + easeOut(su) * 1.0);
+      sm.m.scale.setScalar(Math.max(.001, s));
+      sm.m.position.set(sm.dx * size * (.4 + su * .9) + Math.sin(age * 1.3 + sm.wob) * .12 * size, size * (.4 + su * sm.rise * 1.8), sm.dz * size * (.4 + su * .9));
+      sm.m.material.opacity = .45 * Math.min(1, su * 4) * (1 - su * su);
+      const warm = Math.max(0, 1 - su * 3);                        // frischer Rauch noch vom Feuer beleuchtet
+      sm.m.material.color.copy(cSmoke).lerp(cDeep, warm * .3);
+      sm.m.material.emissive.copy(cDeep).multiplyScalar(warm * .3 * flick);
+    }
+    const cu = clamp(age / .3, 0, 1);
     core.scale.setScalar(Math.max(.001, size * .4 * Math.sin(cu * Math.PI)));
     core.visible = cu < 1;
+    for (const c of chunks) {
+      const tt = age * c.sp;
+      c.m.position.set(c.v[0] * tt, Math.max(c.s, c.v[1] * tt - 9.81 * tt * tt * .5), c.v[2] * tt);
+      c.m.rotation.set(c.rot[0] * tt, c.rot[1] * tt, c.rot[2] * tt);
+      c.m.scale.setScalar(c.s); c.m.visible = u < .85;
+    }
     const pa = deb.geometry.attributes.position.array;
     for (let i = 0; i < debris; i++) { const d = dv[i], tt = age * (.7 + d[3] * .6); pa[i * 3] = d[0] * tt; pa[i * 3 + 1] = Math.max(0, d[1] * tt - 9.81 * tt * tt * .5); pa[i * 3 + 2] = d[2] * tt; }
     deb.geometry.attributes.position.needsUpdate = true; deb.material.opacity = .95 * (1 - u);
@@ -817,33 +897,94 @@ export function fireball(r, { size = 2.5, duration = 2.6, debris = 60, sparks = 
     for (let i = 0; i < sparks; i++) { const d = sv[i], tt = Math.min(age, 1.2) * (.6 + d[3] * .7); sa[i * 3] = d[0] * tt; sa[i * 3 + 1] = Math.max(0, d[1] * tt - 9.81 * tt * tt * .35); sa[i * 3 + 2] = d[2] * tt; }
     spk.geometry.attributes.position.needsUpdate = true; spk.material.opacity = Math.max(0, 1 - age / 1.3);
     const ea = emb.geometry.attributes.position.array;
-    for (let i = 0; i < ev.length; i++) { const d = ev[i], tt = age * (.8 + d[3] * .5); ea[i * 3] = d[0] * tt; ea[i * 3 + 1] = Math.max(.1, d[1] * tt - 9.81 * tt * tt * .5); ea[i * 3 + 2] = d[2] * tt; }
-    emb.geometry.attributes.position.needsUpdate = true; emb.material.opacity = Math.max(0, 1 - u * 1.1); emb.material.size = .3 * (1 - u * .5);
+    for (let i = 0; i < nEmb; i++) { const d = ev[i], tt = age * (.8 + d[3] * .5); ea[i * 3] = d[0] * tt; ea[i * 3 + 1] = Math.max(.1, d[1] * tt - 9.81 * tt * tt * .5); ea[i * 3 + 2] = d[2] * tt; }
+    emb.geometry.attributes.position.needsUpdate = true; emb.material.opacity = Math.max(0, 1 - u * 1.1) * (.8 + .2 * Math.sin(age * 23)); emb.material.size = .26 * (1 - u * .5);
     const aa = ash.geometry.attributes.position.array;
-    for (let i = 0; i < av.length; i++) { const d = av[i]; aa[i * 3] = d[0] + Math.sin(age * 2 + i) * .3; aa[i * 3 + 1] = d[1] + age * d[3] * 2.5; aa[i * 3 + 2] = d[2] + Math.cos(age * 1.7 + i) * .3; }
-    ash.geometry.attributes.position.needsUpdate = true; ash.material.opacity = Math.max(0, .9 - u);
-    if (shock) { const su = clamp(age / 1.0, 0, 1); shock.scale.setScalar(.5 + su * size * 4); shock.material.opacity = (1 - su) * .35; shock.visible = su < 1; }
-    flash.intensity = size * 60 * Math.max(0, 1 - age * 3);
+    for (let i = 0; i < nAsh; i++) { const d = av[i]; aa[i * 3] = d[0] + Math.sin(age * 2 + i) * .3; aa[i * 3 + 1] = d[1] + age * d[3] * 2.5; aa[i * 3 + 2] = d[2] + Math.cos(age * 1.7 + i) * .3; }
+    ash.geometry.attributes.position.needsUpdate = true; ash.material.opacity = Math.max(0, .7 - u * .8);
+    if (shock) { const su = clamp(age / 1.0, 0, 1); shock.scale.setScalar(.5 + su * size * 4); shock.material.opacity = (1 - su) * .25; shock.visible = su < 1; }
+    flash.intensity = size * 60 * Math.max(0, 1 - age * 3) + size * 6 * Math.max(0, 1 - age / fireEnd) * flick;
   };
   return g;
 }
 
-// Wassersäule: aufsteigende Säule, Gischtkrone, zurückfallende Tropfen, Schaumring auf dem Wasser
-export function waterColumn(r, { height = 9, radius = .9, duration = 2.4, drops = 140 } = {}) {
+// Dauerbrand: ruhig flackernde Flammenzungen mit Glutpartikeln (für brennende Schiffe, Ölteppiche, Ruinen)
+export function flame(r, { size = 1, tongues = 6, embers = 24 } = {}) {
   const g = new THREE.Group();
-  const white = new THREE.MeshLambertMaterial({ color: '#dfe9f2', transparent: true, opacity: .92 });
-  const col = new THREE.Mesh(new THREE.CylinderGeometry(.3, .9, 1, 14, 1, true), white); col.castShadow = false; g.add(col);
+  const cHot = new THREE.Color('#ffe9a0'), cFire = new THREE.Color('#ff9a30'), cDeep = new THREE.Color('#c8471e');
+  const tg = [];
+  for (let i = 0; i < tongues; i++) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 7), new THREE.MeshLambertMaterial({ color: '#ff9a30', emissive: '#ff8a2a', emissiveIntensity: 1.2, transparent: true, opacity: .9 })); m.castShadow = false;
+    tg.push({ m, x: (r() - .5) * size * .7, z: (r() - .5) * size * .7, ph: r() * 6.28, sp: 2.2 + r() * 1.6, k: .14 + r() * .18, len: 1.8 + r() * 1.4 });
+    g.add(m);
+  }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(Math.max(1, embers) * 3), 3));
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: '#ff8a3a', size: .12 * size, transparent: true, opacity: .9, depthWrite: false })); pts.material.toneMapped = false; g.add(pts);
+  const ev = []; for (let i = 0; i < embers; i++) ev.push([(r() - .5) * size, (r() - .5) * size, r(), .6 + r() * .8]);
+  const tmpC = new THREE.Color();
+  g.visible = false;
+  g.userData.at = (age, strength = 1) => {
+    if (age < 0) { g.visible = false; return; }
+    g.visible = true;
+    const on = Math.min(1, age / .5) * strength;
+    for (const t of tg) {
+      const w = .5 + .5 * Math.sin(age * t.sp + t.ph), w2 = Math.sin(age * t.sp * 1.7 + t.ph * 2);
+      const s = size * t.k * on * (.7 + .3 * w);
+      t.m.scale.set(Math.max(.001, s * .7), Math.max(.001, s * t.len * (.8 + .5 * w)), Math.max(.001, s * .7));
+      t.m.position.set(t.x + w2 * .1 * size, s * t.len * .6, t.z + Math.cos(age * t.sp + t.ph) * .08 * size);
+      tmpC.copy(cHot).lerp(w > .5 ? cFire : cDeep, .4 + .6 * w);
+      t.m.material.color.copy(tmpC).multiplyScalar(.7); t.m.material.emissive.copy(tmpC).multiplyScalar(.8 + .4 * w);
+      t.m.material.opacity = .9 * on;
+    }
+    const pa = geo.attributes.position.array;
+    for (let i = 0; i < embers; i++) { const e = ev[i], k = (e[2] + age * e[3] * .35) % 1; pa[i * 3] = e[0] + Math.sin(age * 3 + i) * .15 * size * k; pa[i * 3 + 1] = k * size * 2.2; pa[i * 3 + 2] = e[1] + Math.cos(age * 2.3 + i) * .15 * size * k; }
+    geo.attributes.position.needsUpdate = true; pts.material.opacity = .9 * on;
+  };
+  return g;
+}
+
+// Wassersäule: Sprühkuppel am Wasser, klumpige Säule aus Gischtballen, Fontänenstrahlen, Gischtkrone,
+// grobe Tropfen und feiner Sprühnebel, hängende Nebelwolke nach dem Zusammenfall, Schaum und Ringwellen
+export function waterColumn(r, { height = 9, radius = .9, duration = 2.6, drops = 140 } = {}) {
+  const g = new THREE.Group();
+  const white = () => new THREE.MeshLambertMaterial({ color: '#d3dfe9', transparent: true, opacity: .88 });
+  // Säule aus vielen kleinen, versetzten Gischtballen
+  const lumps = [];
+  for (let i = 0; i < 30; i++) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1, 9, 7), white()); m.castShadow = false;
+    const h = Math.pow(r(), .8), a = r() * 6.283, d = (.1 + r() * 1.2) * (1.2 - h * .7);   // unten breit, oben schmal, unregelmäßig
+    lumps.push({ m, h, k: (.38 + r() * .4) * (1.2 - h * .5), dx: Math.cos(a) * d, dz: Math.sin(a) * d, wob: r() * 6.28, len: 1.0 + r() * .6 });
+    g.add(m);
+  }
+  const core = new THREE.Mesh(new THREE.CylinderGeometry(.3, .9, 1, 14, 1, true), new THREE.MeshLambertMaterial({ color: '#d3dfe9', transparent: true, opacity: .7, depthWrite: false })); core.castShadow = false; g.add(core);
+  // Fontänenstrahlen, die über die Säule hinausschießen
+  const jets = [];
+  for (let i = 0; i < 8; i++) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1, 7, 6), white()); m.castShadow = false;
+    const a = r() * 6.283, spread = .15 + r() * .35;
+    jets.push({ m, dir: new THREE.Vector3(Math.cos(a) * spread, 1, Math.sin(a) * spread).normalize(), v: height * (1.1 + r() * .5), delay: .05 + r() * .25, k: .07 + r() * .08, len: 2.5 + r() * 2.5 });
+    g.add(m);
+  }
   const crown = new THREE.Group();
-  for (let i = 0; i < 11; i++) { const b = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 8), white); b.castShadow = false; b.userData.a = i / 11 * 6.283 + r() * .5; b.userData.k = .5 + r() * .8; b.userData.e = .6 + r() * .9; b.scale.set(1, .6 + r() * .6, 1); crown.add(b); }
+  for (let i = 0; i < 11; i++) { const b = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 8), white()); b.castShadow = false; b.userData.a = i / 11 * 6.283 + r() * .5; b.userData.k = .5 + r() * .8; b.userData.e = .6 + r() * .9; crown.add(b); }
   g.add(crown);
-  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(drops * 3), 3));
-  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: '#f4f8ff', size: .16, transparent: true, opacity: .95, depthWrite: false })); pts.material.toneMapped = false; g.add(pts);
-  const dv = []; for (let i = 0; i < drops; i++) { const a = r() * 6.283, sp = radius * (1.5 + r() * 4), up = height * (.9 + r() * .5); dv.push([Math.cos(a) * sp, up, Math.sin(a) * sp, r() * .3]); }
+  // Sprühkuppel am Fuß
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshLambertMaterial({ color: '#e8f0f6', transparent: true, opacity: .7 })); dome.castShadow = false; g.add(dome);
+  // Nebelwolke, die nach dem Zusammenfall hängen bleibt
+  const mists = [];
+  for (let i = 0; i < 6; i++) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 6), new THREE.MeshLambertMaterial({ color: '#cfdbe6', transparent: true, opacity: .35 })); m.castShadow = false;
+    const a = r() * 6.283; mists.push({ m, dx: Math.cos(a) * (.5 + r()), dz: Math.sin(a) * (.5 + r()), k: .3 + r() * .25, h: .2 + r() * .35 }); g.add(m);
+  }
+  const mkPts = (n, color, sz, op) => { const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(Math.max(1, n) * 3), 3)); const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color, size: sz, transparent: true, opacity: op, depthWrite: false })); pts.material.toneMapped = false; g.add(pts); return pts; };
+  const coarse = mkPts(drops, '#f4f8ff', .16, .95), fine = mkPts(drops, '#dfe9f2', .06, .6);
+  const dv = [], fv = [];
+  for (let i = 0; i < drops; i++) { const a = r() * 6.283, sp = radius * (1.5 + r() * 4), up = height * (.9 + r() * .5); dv.push([Math.cos(a) * sp, up, Math.sin(a) * sp, r() * .3]); }
+  for (let i = 0; i < drops; i++) { const a = r() * 6.283, sp = radius * (2 + r() * 6), up = height * (1.0 + r() * .7); fv.push([Math.cos(a) * sp, up, Math.sin(a) * sp, r() * .4]); }
   const foam = new THREE.Mesh(new THREE.RingGeometry(.6, 1, 40), new THREE.MeshBasicMaterial({ color: '#dfe8f0', transparent: true, side: THREE.DoubleSide, depthWrite: false }));
   foam.rotation.x = -Math.PI / 2; foam.position.y = .06; g.add(foam);
   const ripples = [];
   for (let i = 0; i < 2; i++) { const rp = new THREE.Mesh(new THREE.RingGeometry(.95, 1, 48), new THREE.MeshBasicMaterial({ color: '#cfdbe6', transparent: true, side: THREE.DoubleSide, depthWrite: false })); rp.rotation.x = -Math.PI / 2; rp.position.y = .04; g.add(rp); ripples.push(rp); }
-  const spray = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 16, 1, true), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: .25, side: THREE.DoubleSide, depthWrite: false })); spray.castShadow = false; g.add(spray);
   g.visible = false;
   g.userData.at = age => {
     if (age < 0 || age > duration) { g.visible = false; return; }
@@ -852,17 +993,47 @@ export function waterColumn(r, { height = 9, radius = .9, duration = 2.4, drops 
     const rise = easeOut(clamp(age / .9, 0, 1));                    // Säule schießt hoch
     const fall = clamp((age - .9) / (duration - .9), 0, 1);           // und sinkt zusammen
     const h = height * rise * (1 - fall * .85);
-    col.scale.set(radius * (1 + fall * .4), Math.max(.01, h), radius * (1 + fall * .4)); col.position.y = h / 2;
-    col.material.opacity = .92 * (1 - fall * .7); col.visible = h > .1;
+    const fade = 1 - fall * .75;
+    core.scale.set(radius * (1 + fall * .5), Math.max(.01, h), radius * (1 + fall * .5)); core.position.y = h / 2; core.visible = h > .1; core.material.opacity = .7 * fade;
+    for (const l of lumps) {
+      const top = l.h * height * rise;                                 // Ballen erscheinen, sobald die Säule ihre Höhe erreicht
+      const vis = top < h + radius && fall < .95;
+      l.m.visible = vis; if (!vis) continue;
+      const s = radius * l.k * (1 + fall * .3) * Math.min(1, (h - top + radius) / radius);
+      l.m.scale.set(Math.max(.01, s), Math.max(.01, s * l.len), Math.max(.01, s));
+      l.m.position.set(l.dx * radius * (1 + fall * .6) + Math.sin(age * 4 + l.wob) * .08 * radius, Math.min(top, h), l.dz * radius * (1 + fall * .6) + Math.cos(age * 3 + l.wob) * .08 * radius);
+      l.m.material.opacity = .88 * fade;
+    }
+    for (const j of jets) {
+      const tt = Math.max(0, age - j.delay);
+      const y = j.v * tt - 9.81 * tt * tt * .5;
+      j.m.visible = tt > 0 && y > 0 && age < 1.6;
+      if (!j.m.visible) continue;
+      j.m.position.set(j.dir.x * j.v * tt, y, j.dir.z * j.v * tt);
+      const s = radius * j.k * (1 - tt * .25);
+      j.m.scale.set(Math.max(.01, s), Math.max(.01, s * j.len * Math.max(.4, 1 - tt * .5)), Math.max(.01, s));
+      j.m.material.opacity = .9 * Math.max(0, 1 - tt * .7);
+    }
     const cr = clamp((age - .5) / 1.0, 0, 1);
     crown.position.y = h; crown.visible = cr > 0 && fall < .9;
-    for (const b of crown.children) { const k = b.userData.k, s = radius * (.25 + cr * .7) * k * (1 - fall * .6); b.scale.set(Math.max(.01, s), Math.max(.01, s * b.userData.e), Math.max(.01, s)); b.position.set(Math.cos(b.userData.a) * radius * (.3 + cr * 1.1) * k, -cr * radius * .5 - s * .3, Math.sin(b.userData.a) * radius * (.3 + cr * 1.1) * k); }
-    const pa = geo.attributes.position.array;
+    for (const b of crown.children) { const k = b.userData.k, s = radius * (.2 + cr * .5) * k * (1 - fall * .6); b.scale.set(Math.max(.01, s), Math.max(.01, s * b.userData.e), Math.max(.01, s)); b.position.set(Math.cos(b.userData.a) * radius * (.3 + cr * 1.1) * k, -cr * radius * .5 - s * .3, Math.sin(b.userData.a) * radius * (.3 + cr * 1.1) * k); b.material.opacity = .92 * fade; }
+    const du = clamp(age / .9, 0, 1);
+    dome.visible = du < 1; dome.scale.set(radius * (1 + easeOut(du) * 1.8), radius * (.4 + easeOut(du) * .8) * (1 - du), radius * (1 + easeOut(du) * 1.8)); dome.material.opacity = .4 * (1 - du);
+    const pa = coarse.geometry.attributes.position.array;
     for (let i = 0; i < drops; i++) { const d = dv[i], tt = Math.max(0, age - .4 - d[3]); pa[i * 3] = d[0] * tt * .6; pa[i * 3 + 1] = Math.max(0, d[1] * tt - 9.81 * tt * tt * .5); pa[i * 3 + 2] = d[2] * tt * .6; }
-    geo.attributes.position.needsUpdate = true; pts.material.opacity = age > .4 ? .95 * (1 - u) : 0;
-    const fu = clamp(age / 1.6, 0, 1); foam.scale.setScalar(radius * (1 + fu * 2.5)); foam.material.opacity = (1 - fu) * .3;
-    ripples.forEach((rp, i) => { const ru = clamp((age - .3 - i * .5) / 1.8, 0, 1); rp.visible = ru > 0 && ru < 1; rp.scale.setScalar(radius * (1.5 + ru * 4.5)); rp.material.opacity = (1 - ru) * .18; });
-    spray.scale.set(radius * (1.0 + rise * .8), Math.max(.01, h * .5), radius * (1.0 + rise * .8)); spray.position.y = h * .3; spray.rotation.x = Math.PI; spray.material.opacity = .07 * (1 - fall);
+    coarse.geometry.attributes.position.needsUpdate = true; coarse.material.opacity = age > .4 ? .95 * (1 - u) : 0;
+    const fa = fine.geometry.attributes.position.array;
+    for (let i = 0; i < drops; i++) { const d = fv[i], tt = Math.max(0, age - .3 - d[3]); fa[i * 3] = d[0] * tt * .5; fa[i * 3 + 1] = Math.max(0, d[1] * tt - 9.81 * tt * tt * .3); fa[i * 3 + 2] = d[2] * tt * .5; }
+    fine.geometry.attributes.position.needsUpdate = true; fine.material.opacity = age > .3 ? .6 * (1 - u) : 0;
+    const mu = clamp((age - 1.0) / (duration - 1.0), 0, 1);
+    for (const m of mists) {
+      m.m.visible = mu > 0; if (!m.m.visible) continue;
+      const s = radius * m.k * (1 + mu * 1.0); m.m.scale.setScalar(Math.max(.01, s));
+      m.m.position.set(m.dx * radius * (1 + mu * 1.2), height * m.h * (1 - mu * .4) + s * .3, m.dz * radius * (1 + mu * 1.2));
+      m.m.material.opacity = .18 * Math.sin(mu * Math.PI);
+    }
+    const fu = clamp(age / 1.6, 0, 1); foam.scale.setScalar(radius * (1 + fu * 2)); foam.material.opacity = (1 - fu) * .22;
+    ripples.forEach((rp, i) => { const ru = clamp((age - .3 - i * .5) / 1.8, 0, 1); rp.visible = ru > 0 && ru < 1; rp.scale.setScalar(radius * (1.5 + ru * 3.5)); rp.material.opacity = (1 - ru) * .1; });
   };
   return g;
 }
@@ -871,7 +1042,7 @@ export function smokeColumn(r, { color = P.darkGrey, height = 8, n = 9, width = 
   const g = new THREE.Group();
   const puffs = [];
   for (let i = 0; i < n; i++) {
-    const p = mesh(new THREE.SphereGeometry(1, 8, 6), new THREE.MeshLambertMaterial({ color, transparent: true, opacity: .85 }));
+    const p = mesh(new THREE.SphereGeometry(1, 8, 6), new THREE.MeshLambertMaterial({ color, transparent: true, opacity: .7 }));
     p.castShadow = false; p.userData.o = r(); p.userData.dx = (r() - .5) * 2; p.userData.dz = (r() - .5) * 2;
     puffs.push(p); g.add(p);
   }
@@ -880,7 +1051,7 @@ export function smokeColumn(r, { color = P.darkGrey, height = 8, n = 9, width = 
       const u = (p.userData.o + t * .12) % 1;
       p.position.set(p.userData.dx * width * u + wind * u * height * .5, u * height, p.userData.dz * width * u);
       p.scale.setScalar(width * (.4 + u * 1.6));
-      p.material.opacity = .85 * (1 - u * u);
+      p.material.opacity = .7 * (1 - u * u);
     }
   };
   return g;
