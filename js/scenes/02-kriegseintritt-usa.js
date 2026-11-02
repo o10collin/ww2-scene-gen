@@ -12,9 +12,9 @@ export default {
     rotStart: { type: 'number', min: -360, max: 360, step: 1, value: 105, label: 'Drehung Start (°)' },
     rotEnd: { type: 'number', min: -360, max: 360, step: 1, value: -50, label: 'Drehung Ende (°)' },
     tilt: { type: 'number', min: -45, max: 45, step: 1, value: 12, label: 'Neigung (°)' },
-    oceanColor: { type: 'color', value: '#2f5b78', label: 'Ozean' },
-    landColor: { type: 'color', value: '#d6c49a', label: 'Land' },
-    spaceColor: { type: 'color', value: '#141923', label: 'Hintergrund' },
+    oceanColor: { type: 'color', value: '#0e1520', label: 'Ozean' },
+    landColor: { type: 'color', value: '#767b82', label: 'Land' },
+    spaceColor: { type: 'color', value: '#07090e', label: 'Hintergrund' },
     labels: { type: 'boolean', value: true, label: 'Beschriftungen' },
     tAttack: { type: 'number', min: 0, max: 10, step: .1, value: .5, label: 'Angriff ab (s)' },
     tUSA: { type: 'number', min: 0, max: 10, step: .1, value: 3.2, label: 'USA ab (s)' },
@@ -30,9 +30,9 @@ export default {
     g.rotation.x = p.tilt * Math.PI / 180;
     scene.add(g);
     const U = g.userData;
-    const mk = (ll, c, r = .16) => U.marker(ll[0], ll[1], c, r);
+    const mk = (ll, c, r = .16) => { const m = U.marker(ll[0], ll[1], c, r); m.material = H.glowMat(c, 2); return m; };
     const mTokio = mk(TOKIO, P.red), mPearl = mk(PEARL, P.orange, .14), mWash = mk(WASHINGTON, P.blue, .2), mBerlin = mk(BERLIN, P.darkGrey), mRom = mk(ROM, P.darkGrey);
-    const attack = U.arc(TOKIO, PEARL, P.red, { lift: 1.35 });
+    const attack = U.arc(TOKIO, PEARL, H.ROLE.axis, { lift: 1.35 });
     const declB = U.arc(BERLIN, WASHINGTON, '#777c88', { lift: 1.45, radius: .06 });
     const declR = U.arc(ROM, WASHINGTON, '#777c88', { lift: 1.4, radius: .06 });
     const boom = H.explosion({ size: .8, duration: 1.4, color: P.orange, smoke: P.yellow });

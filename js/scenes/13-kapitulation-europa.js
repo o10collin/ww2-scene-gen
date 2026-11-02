@@ -10,13 +10,13 @@ export default {
     tSign: { type: 'number', min: 0, max: 10, step: .1, value: 1.5, label: 'Unterschrift ab (s)' },
     signDur: { type: 'number', min: .5, max: 8, step: .1, value: 4, label: 'Unterschrift Dauer (s)' },
     flags: { type: 'boolean', value: true, label: 'Flaggen' },
-    wallColor: { type: 'color', value: '#7d7461', label: 'Wand' },
-    floorColor: { type: 'color', value: '#4e4238', label: 'Boden' },
+    wallColor: { type: 'color', value: '#3a3f47', label: 'Wand' },
+    floorColor: { type: 'color', value: '#2b3038', label: 'Boden' },
     lightColor: { type: 'color', value: '#ffe6c2', label: 'Lampenlicht' },
     ...H.cameraParams([-5, 2.6, 7], [-1.5, 2.1, 4.2], [0, 1, 0], 38)
   },
   build({ scene, params: p, rng: r, shadows }) {
-    H.sky(scene, '#2a2824', 20, 60);
+    H.sky(scene, '#0e1014', 20, 60);
     H.lights(scene, { sun: [-3, 8, 5], intensity: .6, hemi: .6, shadows, skyColor: p.lightColor, groundColor: '#221', shadowSize: 20 });
     scene.add(H.ground(80, p.floorColor));
     const wall = H.box(40, 10, .5, p.wallColor); wall.position.set(0, 5, -6); scene.add(wall);
@@ -29,13 +29,13 @@ export default {
     const lampLight = new THREE.PointLight(p.lightColor, 30, 14, 1.5); lampLight.position.set(0, 3.2, 0); scene.add(lampLight);
     const shade = H.cone(.7, .5, '#2a2a2a', 16); shade.rotation.x = Math.PI; shade.position.set(0, 3.4, 0); scene.add(shade);
     // Delegationen hinter dem Tisch
-    const uniforms = ['#6b7355', '#8a7b5a', '#7a4a42', '#4a5f7a', '#6b7355'];
+    const roles = [H.ROLE.west, H.ROLE.west, H.ROLE.soviet, H.ROLE.west, H.ROLE.soviet];
     for (let i = 0; i < 5; i++) {
-      const f = H.figure({ color: uniforms[i], head: r() < .5 ? P.skin : '#c9a98d' });
+      const f = H.figure({ color: P.grey, glow: roles[i] });
       f.position.set(-2.6 + i * 1.3, 0, -1.4); f.rotation.y = Math.PI / 2; scene.add(f);
     }
     // Unterzeichnender vor dem Tisch
-    const signer = H.figure({ color: '#555a63', head: P.skin, glow: '#3a2a2a' }); signer.position.set(0, 0, 1.3); signer.rotation.y = -Math.PI / 2; scene.add(signer);
+    const signer = H.figure({ color: '#555a63', glow: H.ROLE.axis }); signer.position.set(0, 0, 1.3); signer.rotation.y = -Math.PI / 2; scene.add(signer);
     const [, , , , armL, armR] = signer.children;
     if (p.flags) {
       const sets = [[P.blue, P.white, P.red], [P.red, P.white, P.blue], [P.red, P.red], [P.blue, P.white, P.red]];

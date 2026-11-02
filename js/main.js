@@ -17,18 +17,25 @@ const GLOBAL_SCHEMA = {
   width: { type: 'number', min: 320, max: 4096, step: 2, value: 1920, label: 'Breite (Eigene)', group: 'Bild' },
   height: { type: 'number', min: 320, max: 4096, step: 2, value: 1080, label: 'Höhe (Eigene)', group: 'Bild' },
   shading: { type: 'select', options: ['lambert', 'toon'], value: 'lambert', label: 'Shading', group: 'Bild' },
-  darken: { type: 'number', min: 0, max: 1, step: .05, value: .45, label: 'Abdunkeln (Himmel/Licht)', group: 'Bild' },
-  bloom: { type: 'number', min: 0, max: 2, step: .05, value: .55, label: 'Bloom (Leuchten)', group: 'Bild' },
-  bloomThreshold: { type: 'number', min: 0, max: 1, step: .01, value: .7, label: 'Bloom Schwelle', group: 'Bild' },
+  darken: { type: 'number', min: 0, max: 1, step: .05, value: .55, label: 'Abdunkeln (Himmel/Licht)', group: 'Bild' },
+  bloom: { type: 'number', min: 0, max: 3, step: .05, value: .55, label: 'Bloom (Leuchten)', group: 'Bild' },
+  bloomThreshold: { type: 'number', min: 0, max: 1, step: .01, value: .8, label: 'Bloom Schwelle', group: 'Bild' },
+  bloomRadius: { type: 'number', min: 0, max: 1, step: .05, value: .35, label: 'Bloom Weichheit', group: 'Bild' },
+  roleAxis: { type: 'color', value: '#ff2d2d', label: 'Achse / NS (rot)', group: 'Rollenfarben' },
+  roleWest: { type: 'color', value: '#2f7cff', label: 'Westalliierte (blau)', group: 'Rollenfarben' },
+  roleSoviet: { type: 'color', value: '#ffb020', label: 'Sowjetunion (gelb)', group: 'Rollenfarben' },
+  roleCivil: { type: 'color', value: '#cfd6e0', label: 'Zivilisten (weiß)', group: 'Rollenfarben' },
+  glowStrength: { type: 'number', min: 1, max: 5, step: .1, value: 1.8, label: 'Leuchtstärke Figuren', group: 'Rollenfarben' },
   shadows: { type: 'boolean', value: true, label: 'Schatten', group: 'Bild' },
-  grain: { type: 'number', min: 0, max: .5, step: .01, value: .10, label: 'Filmkorn', group: 'Look' },
-  vignette: { type: 'number', min: 0, max: 1, step: .01, value: .35, label: 'Vignette', group: 'Look' },
+  grain: { type: 'number', min: 0, max: .5, step: .01, value: .12, label: 'Filmkorn', group: 'Look' },
+  vignette: { type: 'number', min: 0, max: 1, step: .01, value: .6, label: 'Vignette', group: 'Look' },
   letterbox: { type: 'number', min: 0, max: .2, step: .005, value: 0, label: 'Letterbox', group: 'Look' },
   fadeIn: { type: 'number', min: 0, max: 3, step: .1, value: .5, label: 'Einblenden (s)', group: 'Look' },
   fadeOut: { type: 'number', min: 0, max: 3, step: .1, value: .5, label: 'Ausblenden (s)', group: 'Look' },
   captions: { type: 'boolean', value: true, label: 'Bauchbinde anzeigen', group: 'Text' },
+  captionStyle: { type: 'select', options: ['Serif klein (Simplicissimus)', 'Groß (Sans)'], value: 'Serif klein (Simplicissimus)', label: 'Bauchbinden-Stil', group: 'Text' },
   captionSize: { type: 'number', min: .4, max: 2.5, step: .05, value: 1, label: 'Bauchbinde Größe', group: 'Text' },
-  captionFont: { type: 'select', options: ['Inter', 'Georgia', 'Courier New', 'Arial'], value: 'Inter', label: 'Schrift', group: 'Text' },
+  captionFont: { type: 'select', options: ['Cormorant Garamond', 'Inter', 'Georgia', 'Courier New', 'Arial'], value: 'Cormorant Garamond', label: 'Schrift', group: 'Text' },
   captionColor: { type: 'color', value: '#f4f1ea', label: 'Textfarbe', group: 'Text' },
   accent: { type: 'color', value: '#e2b24f', label: 'Akzentfarbe', group: 'Text' },
   captionPos: { type: 'select', options: ['unten links', 'unten mitte', 'oben links'], value: 'unten links', label: 'Position', group: 'Text' },
@@ -39,10 +46,10 @@ const GLOBAL_SCHEMA = {
   fps: { type: 'select', options: ['24', '25', '30', '50', '60'], value: '30', label: 'Bilder/s', group: 'Export' },
   bitrate: { type: 'number', min: 2, max: 80, step: 1, value: 20, label: 'Bitrate (Mbit/s)', group: 'Export' }
 };
-const REBUILD_GLOBAL = new Set(['shading', 'shadows', 'darken']);
+const REBUILD_GLOBAL = new Set(['shading', 'shadows', 'darken', 'roleAxis', 'roleWest', 'roleSoviet', 'roleCivil', 'glowStrength']);
 const RESOLUTION_GLOBAL = new Set(['preset', 'width', 'height']);
 
-const LOOK_VERSION = '2';  // bei Änderung der Standard-Optik gespeicherte Globaleinstellungen verwerfen
+const LOOK_VERSION = '5';  // bei Änderung der Standard-Optik gespeicherte Globaleinstellungen verwerfen
 try { if (localStorage.getItem(LS + 'version') !== LOOK_VERSION) { localStorage.removeItem(LS + 'global'); localStorage.setItem(LS + 'version', LOOK_VERSION); } } catch { /* kein Speicher */ }
 const global = {};
 for (const [k, s] of Object.entries(GLOBAL_SCHEMA)) global[k] = s.value;
@@ -123,6 +130,7 @@ function loadScene(i, keepTime = false) {
   const def = SCENES[i];
   const params = active && active.def === def ? active.params : paramsFor(def);
   H.setShading(global.shading);
+  H.setRoles({ axis: global.roleAxis, west: global.roleWest, soviet: global.roleSoviet, civil: global.roleCivil, strength: global.glowStrength });
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(params.fov || 40, W / Hh, .1, 600);
   const api = def.build({ THREE, scene, camera, params, H, rng: H.rng(def.seed || 1), shadows: global.shadows }) || {};
@@ -168,7 +176,8 @@ function placeCamera(t) {
 
 // ---------- Bild zusammensetzen (alles, was im Video landen soll) ----------
 function fontFor(sizePx, weight = 700) {
-  const fam = global.captionFont === 'Inter' ? "'Inter', Arial, sans-serif" : `'${global.captionFont}', serif`;
+  const f = global.captionFont;
+  const fam = f === 'Inter' ? "'Inter', Arial, sans-serif" : f === 'Cormorant Garamond' ? "'Cormorant Garamond', Georgia, serif" : `'${f}', serif`;
   return `${weight} ${sizePx}px ${fam}`;
 }
 function wrap(text, maxWidth) {
@@ -193,6 +202,15 @@ function composite(t) {
       if (global.captionPos === 'oben links') { y = m + lb + big + small * 1.4; }
       ctx.textAlign = align; ctx.textBaseline = 'alphabetic';
       const slide = (1 - H.easeOut(a)) * 20 * s;
+      if (global.captionStyle.startsWith('Serif')) {
+        // Referenzstil: kleine Serifenschrift, Datum über Ort, dezenter Schatten
+        const l1 = 30 * s * global.captionSize, l2 = 22 * s * global.captionSize;
+        ctx.shadowColor = 'rgba(0,0,0,.8)'; ctx.shadowBlur = 8 * s;
+        ctx.fillStyle = global.captionColor;
+        if (p.capSub) { ctx.font = fontFor(l1, 500); ctx.fillText(p.capSub, x, y - l2 * 1.5 + slide); }
+        if (p.capTitle) { ctx.font = fontFor(l2, 400); ctx.globalAlpha = a * .85; ctx.fillText(p.capTitle, x, y + slide); }
+        ctx.restore();
+      } else {
       if (p.capSub) {
         ctx.font = fontFor(small, 600); ctx.fillStyle = global.accent;
         try { ctx.letterSpacing = `${small * .12}px`; } catch { /* Safari */ }
@@ -205,6 +223,7 @@ function composite(t) {
         if (align === 'left') { ctx.fillStyle = global.accent; ctx.fillRect(x, y + 14 * s, Math.min(ctx.measureText(p.capTitle).width, 220 * s), 5 * s); }
       }
       ctx.restore();
+      }
     }
   }
   if (global.subtitles && p.subtitle) {
@@ -243,7 +262,7 @@ function renderAt(t) {
   active.api.update?.(t, active.params);
   if (state.orbit) controls.update(); else placeCamera(t);
   renderPass.scene = active.scene; renderPass.camera = active.camera;
-  bloomPass.strength = global.bloom; bloomPass.threshold = global.bloomThreshold;
+  bloomPass.strength = global.bloom; bloomPass.threshold = global.bloomThreshold; bloomPass.radius = global.bloomRadius;
   bloomPass.enabled = global.bloom > 0;
   composer.render();
   composite(t);
@@ -465,6 +484,7 @@ $('#toggle-right').onclick = () => document.body.classList.toggle('hide-right');
 
 // ---------- Start ----------
 document.fonts?.load('700 64px Inter').catch(() => {});
+document.fonts?.load("500 30px 'Cormorant Garamond'").catch(() => {});
 buildSceneList();
 buildGlobalGui();
 applyResolution();

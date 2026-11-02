@@ -13,9 +13,9 @@ export default {
     rotEnd: { type: 'number', min: -360, max: 360, step: 1, value: 100, label: 'Drehung Ende (°)' },
     tilt: { type: 'number', min: -45, max: 45, step: 1, value: 15, label: 'Neigung (°)' },
     fleet: { type: 'number', min: 0, max: 12, step: 1, value: 6, label: 'Schiffe US-Flotte' },
-    oceanColor: { type: 'color', value: '#2f5b78', label: 'Ozean' },
-    landColor: { type: 'color', value: '#d6c49a', label: 'Land' },
-    spaceColor: { type: 'color', value: '#141923', label: 'Hintergrund' },
+    oceanColor: { type: 'color', value: '#0e1520', label: 'Ozean' },
+    landColor: { type: 'color', value: '#767b82', label: 'Land' },
+    spaceColor: { type: 'color', value: '#07090e', label: 'Hintergrund' },
     japanColor: { type: 'color', value: '#c6473a', label: 'Japan-Markierung' },
     labels: { type: 'boolean', value: true, label: 'Beschriftungen' },
     ...H.cameraParams([0, 2.5, 13], [.5, 2, 11.5], [0, 0, 0], 40)
@@ -26,7 +26,7 @@ export default {
     const stars = H.particles(r, { count: 400, area: [80, 60, 20], color: '#ffffff', size: .12, opacity: .7 }); stars.position.z = -30; scene.add(stars);
     const g = H.globe(5, { ocean: p.oceanColor, land: p.landColor }); g.rotation.x = p.tilt * Math.PI / 180; scene.add(g);
     const U = g.userData;
-    const jp = U.marker(JAPAN[0], JAPAN[1], p.japanColor, .22);
+    const jp = U.marker(JAPAN[0], JAPAN[1], p.japanColor, .22); jp.material = H.glowMat(H.ROLE.axis, 2);
     const ring = new THREE.Mesh(new THREE.RingGeometry(.9, 1, 32), new THREE.MeshBasicMaterial({ color: p.japanColor, transparent: true, side: THREE.DoubleSide }));
     ring.position.copy(jp.position); ring.lookAt(jp.position.clone().multiplyScalar(2)); g.add(ring);
     const route = U.arc(PEARL, JAPAN, '#9fb3c2', { lift: 1.12, radius: .03 }); route.userData.setProgress(1); route.material.transparent = true; route.material.opacity = .35;
@@ -34,7 +34,7 @@ export default {
     const mid = p0.clone().add(p2).multiplyScalar(.5).normalize().multiplyScalar(5.3);
     const curve = new THREE.QuadraticBezierCurve3(p0, mid, p2);
     const ships = [];
-    for (let i = 0; i < p.fleet; i++) { const s = H.box(.22, .1, .1, P.white); s.castShadow = false; g.add(s); ships.push({ s, lag: i * .07 + (r() - .5) * .03, side: (r() - .5) * .25 }); }
+    for (let i = 0; i < p.fleet; i++) { const s = H.box(.22, .1, .1, H.glowMat(H.ROLE.west, 1.8)); s.castShadow = false; g.add(s); ships.push({ s, lag: i * .07 + (r() - .5) * .03, side: (r() - .5) * .25 }); }
     if (p.labels) {
       const l1 = H.label('Japan', { size: .6, bg: 'rgba(20,25,35,.75)', depth: true }); l1.position.copy(H.latLon(JAPAN[0] + 5, JAPAN[1], 6.2)); g.add(l1);
       const l2 = H.label('USA (Pazifikflotte)', { size: .5, bg: 'rgba(20,25,35,.75)', depth: true }); l2.position.copy(H.latLon(PEARL[0] - 5, PEARL[1] - 6, 6.4)); g.add(l2);

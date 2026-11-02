@@ -12,19 +12,20 @@ export default {
     attackSpeed: { type: 'number', min: .5, max: 2, step: .05, value: 1, label: 'Angriffstempo' },
     explosionSize: { type: 'number', min: .5, max: 5, step: .1, value: 2.2, label: 'Explosionsgröße' },
     splashes: { type: 'number', min: 0, max: 20, step: 1, value: 8, label: 'Wassersäulen' },
-    skyColor: { type: 'color', value: '#e9b48a', label: 'Himmel' },
-    waterColor: { type: 'color', value: '#3a6a86', label: 'Wasser' },
+    skyColor: { type: 'color', value: '#101722', label: 'Himmel' },
+    waterColor: { type: 'color', value: '#1c2d3e', label: 'Wasser' },
     planeColor: { type: 'color', value: '#cfcac0', label: 'Flugzeugfarbe' },
     ...H.cameraParams([-20, 7, 24], [-10, 6, 17], [2, 1, -2], 38)
   },
   build({ scene, params: p, rng: r, shadows }) {
     H.sky(scene, p.skyColor, 50, 140);
-    H.lights(scene, { sun: [-10, 14, 8], shadows, skyColor: p.skyColor, shadowSize: 40 });
+    H.lights(scene, { sun: [-10, 14, 8], shadows, intensity: 1.1, hemi: .6, skyColor: '#9fb3c8', groundColor: '#111', shadowSize: 40 });
+    H.lightPool(scene, { x: 0, z: -2, radius: 22, height: 40, intensity: 220 });
     const water = H.wavePlane(160, 160, 40, p.waterColor, { amp: .08 });
     scene.add(water);
     // Insel im Hintergrund
     for (let i = 0; i < 7; i++) {
-      const hill = H.sphere(6 + r() * 8, i % 2 ? P.green : P.olive, 14);
+      const hill = H.sphere(6 + r() * 8, i % 2 ? '#2a3038' : '#232930', 14);
       hill.position.set(-40 + i * 14 + r() * 6, -3, -40 - r() * 12); hill.scale.y = .45; scene.add(hill);
     }
     // Schiffe in Reihe ("Battleship Row")
@@ -39,7 +40,7 @@ export default {
     const planes = [];
     for (let i = 0; i < p.planes; i++) {
       const target = ships[i % ships.length].position.clone();
-      const m = H.faceZ(H.aircraft(p.planeColor, { accent: P.red }));
+      const m = H.faceZ(H.aircraft(H.glowMat(H.ROLE.axis)));
       scene.add(m);
       const t0 = i * (0.55 / p.attackSpeed) + r() * .3;
       const a = new THREE.Vector3(-55 + r() * 10, 18 + r() * 6, -30 + r() * 30);

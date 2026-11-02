@@ -13,7 +13,7 @@ export default {
     cloudHeight: { type: 'number', min: 5, max: 40, step: 1, value: 20, label: 'Pilzhöhe' },
     buildings: { type: 'number', min: 10, max: 150, step: 5, value: 90, label: 'Gebäude' },
     shock: { type: 'number', min: 0, max: 1, step: .05, value: .8, label: 'Druckwelle' },
-    skyColor: { type: 'color', value: '#c9d6de', label: 'Himmel' },
+    skyColor: { type: 'color', value: '#6f7d8c', label: 'Himmel' },
     cityColor: { type: 'color', value: '#b9aa94', label: 'Stadt' },
     fireColor: { type: 'color', value: '#e8893a', label: 'Feuerball' },
     cloudColor: { type: 'color', value: '#7d7a76', label: 'Wolke' },
@@ -27,7 +27,7 @@ export default {
     const city = H.city(r, { count: p.buildings, area: 80, minH: 1.5, maxH: 6, colors: [p.cityColor, '#a79b88', '#cbbfa8', '#8f8577'], gap: 1.5, exclude: 3 });
     scene.add(city);
     const blds = city.children.map(b => ({ b, d: Math.hypot(b.position.x, b.position.z), ang: Math.atan2(b.position.z, b.position.x) }));
-    const bomber = H.faceZ(H.aircraft('#c9ccd1', { span: 7.5, length: 5.5, engines: 4 })); bomber.rotation.y = Math.PI / 2; scene.add(bomber);
+    const bomber = H.faceZ(H.aircraft(H.glowMat(H.ROLE.west, 1.6), { span: 7.5, length: 5.5, engines: 4 })); bomber.rotation.y = Math.PI / 2; scene.add(bomber);
     const bomb = H.cyl(.35, .35, 1.6, '#3a3d44', 10); bomb.castShadow = false; scene.add(bomb);
     const fireball = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), new THREE.MeshBasicMaterial({ color: p.fireColor })); fireball.visible = false; scene.add(fireball);
     const cloudMat = new THREE.MeshBasicMaterial({ color: p.cloudColor });  // flach, ohne Schattierung (Papier-Look)

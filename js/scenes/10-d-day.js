@@ -13,24 +13,25 @@ export default {
     arrive: { type: 'number', min: 1, max: 8, step: .1, value: 4, label: 'Ankunft nach (s)' },
     explosions: { type: 'number', min: 0, max: 12, step: 1, value: 5, label: 'Einschläge' },
     planes: { type: 'number', min: 0, max: 6, step: 1, value: 2, label: 'Flugzeuge' },
-    skyColor: { type: 'color', value: '#aab6bf', label: 'Himmel' },
-    waterColor: { type: 'color', value: '#4a6f84', label: 'Wasser' },
-    sandColor: { type: 'color', value: '#cdbb93', label: 'Sand' },
+    skyColor: { type: 'color', value: '#111820', label: 'Himmel' },
+    waterColor: { type: 'color', value: '#1f3242', label: 'Wasser' },
+    sandColor: { type: 'color', value: '#8f98a6', label: 'Sand' },
     uniformColor: { type: 'color', value: '#6f7a5a', label: 'Uniform' },
     glow: { type: 'boolean', value: true, label: 'Soldaten leuchten blau' },
-    ...H.cameraParams([-2, 6, 26], [6, 5, 20], [8, 1, 0], 40)
+    ...H.cameraParams([-6, 16, 24], [4, 13, 18], [8, 0, 0], 40)
   },
   build({ scene, params: p, rng: r, shadows }) {
     H.sky(scene, p.skyColor, 40, 130);
-    H.lights(scene, { sun: [-8, 14, 10], intensity: 1.1, hemi: .9, shadows, skyColor: p.skyColor, groundColor: '#665', shadowSize: 50 });
+    H.lights(scene, { sun: [-8, 14, 10], intensity: .6, hemi: .5, shadows, skyColor: '#8fa3bb', groundColor: '#223', shadowSize: 50 });
+    H.lightPool(scene, { x: 8, z: 0, radius: 20, height: 36, intensity: 220 });
     const beach = H.ground(200, p.sandColor); scene.add(beach);
     const water = H.wavePlane(80, 120, 48, p.waterColor, { amp: .18 }); water.position.set(-30, .45, 0); scene.add(water);
     const foam = H.box(.6, .05, 120, P.white); foam.castShadow = false; foam.position.set(10.2, .5, 0); scene.add(foam);
     // Klippen
     for (let i = 0; i < 8; i++) {
-      const c = H.box(10, 6 + r() * 6, 14 + r() * 6, i % 2 ? '#6e7f5c' : '#8a8a78');
+      const c = H.box(10, 6 + r() * 6, 14 + r() * 6, i % 2 ? '#2f3a3a' : '#363c42');
       c.position.set(36 + r() * 6, (6 + r() * 6) / 2, -56 + i * 16); scene.add(c);
-      const top = H.box(10, .6, 14 + r() * 6, P.green); top.position.set(c.position.x, c.position.y * 2 + .3, c.position.z); scene.add(top);
+      const top = H.box(10, .6, 14 + r() * 6, '#3a4a3e'); top.position.set(c.position.x, c.position.y * 2 + .3, c.position.z); scene.add(top);
     }
     for (let i = 0; i < p.obstacles; i++) {
       const g = new THREE.Group();
@@ -42,7 +43,7 @@ export default {
       const c = H.landingCraft('#5d6a55'); scene.add(c);
       const soldiers = [];
       for (let k = 0; k < p.soldiersPer; k++) {
-        const f = H.figure({ color: p.uniformColor, helmet: '#4d5a3e', scale: .8, glow: p.glow ? '#3b6ea5' : null });
+        const f = H.figure({ color: p.uniformColor, helmet: '#4d5a3e', scale: .8, glow: p.glow ? H.ROLE.west : null });
         scene.add(f); soldiers.push({ f, lag: k * .35 + r() * .2, dz: (r() - .5) * 1.0 });
       }
       crafts.push({ c, z: -18 + i * (36 / p.crafts) + r() * 3, delay: r() * 1.2, soldiers, ph: r() * 6 });

@@ -26,7 +26,7 @@ export default {
     city.traverse(o => { if (o.isInstancedMesh) { o.material = new THREE.MeshBasicMaterial({ color: '#d9b36a' }); o.visible = r() < .6; } });
     const bombers = [], bombs = [];
     for (let i = 0; i < p.bombers; i++) {
-      const b = H.faceZ(H.aircraft('#2b2f38', { span: 7, length: 5, engines: 4 }));
+      const b = H.faceZ(H.aircraft(H.glowMat(H.ROLE.west, 1.8), { span: 7, length: 5, engines: 4 }));
       scene.add(b);
       const row = Math.ceil(i / 2), side = i % 2 ? 1 : -1;
       const z = side * row * 6 + (r() - .5), lag = row * 5;

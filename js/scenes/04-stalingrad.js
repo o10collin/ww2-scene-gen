@@ -13,16 +13,17 @@ export default {
     tanks: { type: 'number', min: 0, max: 6, step: 1, value: 2, label: 'Panzer' },
     snow: { type: 'number', min: 0, max: 4000, step: 100, value: 1800, label: 'Schneeflocken' },
     speed: { type: 'number', min: 0, max: 4, step: .1, value: 1.3, label: 'Vorrücktempo' },
-    skyColor: { type: 'color', value: '#8f98a3', label: 'Himmel' },
-    snowColor: { type: 'color', value: '#e4e8ec', label: 'Schnee' },
+    skyColor: { type: 'color', value: '#0c1118', label: 'Himmel' },
+    snowColor: { type: 'color', value: '#a9b6c6', label: 'Schnee' },
     germanColor: { type: 'color', value: '#6f7480', label: 'Deutsche' },
     sovietColor: { type: 'color', value: '#c8392e', label: 'Rote Armee' },
-    glow: { type: 'boolean', value: true, label: 'Rote Armee leuchtet' },
-    ...H.cameraParams([-16, 4.5, 5.5], [-6, 4, 5], [8, 1.5, -1.5], 42)
+    glow: { type: 'boolean', value: true, label: 'Figuren leuchten (Rollenfarben)' },
+    ...H.cameraParams([-8, 18, 14], [-2, 15, 10], [3, 0, -1], 40)
   },
   build({ scene, params: p, rng: r, shadows }) {
     H.sky(scene, p.skyColor, 14, 60);
-    H.lights(scene, { sun: [-6, 12, 8], intensity: 1.1, hemi: 1, shadows, skyColor: p.skyColor, groundColor: '#556', shadowSize: 40 });
+    H.lights(scene, { sun: [-6, 12, 8], intensity: .5, hemi: .5, shadows, skyColor: '#8fa3bb', groundColor: '#223', shadowSize: 40 });
+    H.lightPool(scene, { x: 2, z: 0, radius: 14, height: 30, intensity: 200 });
     scene.add(H.ground(200, p.snowColor));
     // Straße mit Ruinen links und rechts
     for (let i = 0; i < p.ruins; i++) {
@@ -43,19 +44,19 @@ export default {
     // Deutsche weichen nach -X zurück
     const germans = [];
     for (let i = 0; i < p.germans; i++) {
-      const f = H.figure({ color: p.germanColor, helmet: '#555a63' });
+      const f = H.figure({ color: p.germanColor, helmet: '#555a63', glow: p.glow ? H.ROLE.axis : null });
       f.rotation.y = Math.PI; scene.add(f);
       germans.push({ f, x0: -2 + r() * 8, z: -4 + r() * 8, ph: r() * 6 });
     }
     // Rote Armee rückt aus +X vor
     const soviets = [];
     for (let i = 0; i < p.soviets; i++) {
-      const f = H.figure({ color: p.sovietColor, helmet: '#5b3a35', glow: p.glow ? p.sovietColor : null });
+      const f = H.figure({ color: p.sovietColor, helmet: '#5b3a35', glow: p.glow ? H.ROLE.soviet : null });
       scene.add(f); soviets.push({ f, x0: 18 + r() * 12, z: -4 + r() * 8, ph: r() * 6 });
     }
     const tanks = [];
     for (let i = 0; i < p.tanks; i++) {
-      const tk = H.tank('#7d4a42', p.glow ? p.sovietColor : null); tk.rotation.y = Math.PI; scene.add(tk);
+      const tk = H.tank('#7d4a42', p.glow ? H.ROLE.soviet : null); tk.rotation.y = Math.PI; scene.add(tk);
       tanks.push({ tk, x0: 24 + i * 7 + r() * 3, z: -3 + i * 3 });
     }
     const flakes = p.snow > 0 ? H.particles(r, { count: p.snow, area: [60, 20, 40], color: '#ffffff', size: .14 }) : null;

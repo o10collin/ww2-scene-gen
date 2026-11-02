@@ -9,6 +9,19 @@ export const P = {
   steel: '#6d7682', skin: '#d9b9a0', olive: '#7a7d5a', black: '#15171c'
 };
 
+// Rollenfarben im Stil des Referenzvideos (werden von main.js aus den Globaleinstellungen gesetzt)
+export const ROLE = { axis: '#ff2d2d', west: '#2f7cff', soviet: '#ffb020', civil: '#cfd6e0', strength: 1.8 };
+export function setRoles(r) { Object.assign(ROLE, r); }
+
+// Leuchtendes Silhouetten-Material: flache Farbe, über 1.0 verstärkt, damit der Bloom nur die Figuren erfasst
+export function glowMat(color, strength = ROLE.strength, opts = {}) {
+  const c = new THREE.Color(color);
+  const m = new THREE.MeshBasicMaterial({ ...opts });
+  m.color.setRGB(c.r * strength, c.g * strength, c.b * strength);
+  m.toneMapped = false;
+  return m;
+}
+
 // ---------- Mathe ----------
 export function rng(seed) {
   let a = (seed * 2654435761) >>> 0;
@@ -56,9 +69,9 @@ export function disc(r, color, seg = 32, opts) {
 }
 
 // ---------- Licht / Himmel ----------
-export function lights(scene, { sun = [6, 10, 4], intensity = 1.6, hemi = 0.9, skyColor = '#ffffff', groundColor = '#777777', shadowSize = 30, shadows = true } = {}) {
+export function lights(scene, { sun = [6, 10, 4], intensity = 1.6, hemi = 0.9, skyColor = '#ffffff', groundColor = '#777777', shadowSize = 30, shadows = true, sunColor = '#dfe8f5' } = {}) {
   const h = new THREE.HemisphereLight(skyColor, groundColor, hemi);
-  const d = new THREE.DirectionalLight('#ffffff', intensity);
+  const d = new THREE.DirectionalLight(sunColor, intensity);
   d.position.set(...sun);
   d.castShadow = shadows;
   d.shadow.mapSize.set(2048, 2048);
@@ -69,20 +82,30 @@ export function lights(scene, { sun = [6, 10, 4], intensity = 1.6, hemi = 0.9, s
   scene.add(h, d);
   return { hemi: h, sun: d };
 }
+export function lightPool(scene, { x = 0, z = 0, radius = 8, height = 30, intensity = 160, color = '#e3ecf8', penumbra = .6 } = {}) {
+  const sp = new THREE.SpotLight(color, intensity, height * 2.5, Math.atan(radius / height), penumbra, 1.2);
+  sp.position.set(x, height, z); sp.target.position.set(x, 0, z); sp.castShadow = false;
+  scene.add(sp, sp.target);
+  return sp;
+}
 export function sky(scene, color, fogNear = 30, fogFar = 90) {
   scene.background = new THREE.Color(color);
   scene.fog = new THREE.Fog(color, fogNear, fogFar);
 }
 
 // ---------- Beschriftung (Sprite aus Canvas) ----------
-export function label(text, { color = '#f4f1ea', size = 1, font = 'bold 64px Inter, Arial, sans-serif', bg = null, pad = 24, depth = false } = {}) {
+export function label(text, { color = '#f4f1ea', size = 1, font = "500 60px 'Cormorant Garamond', Georgia, serif", bg = null, pad = 24, depth = false, spacing = 0, upper = false, shadow = true } = {}) {
+  if (upper) text = text.toUpperCase();
   const c = document.createElement('canvas');
   const g = c.getContext('2d');
   g.font = font;
-  const w = Math.ceil(g.measureText(text).width) + pad * 2;
+  try { g.letterSpacing = spacing + 'px'; } catch { /* Safari */ }
+  const w = Math.ceil(g.measureText(text).width) + pad * 2 + spacing;
   const h = 96;
   c.width = w; c.height = h;
   g.font = font;
+  try { g.letterSpacing = spacing + 'px'; } catch { /* Safari */ }
+  if (shadow) { g.shadowColor = 'rgba(0,0,0,.9)'; g.shadowBlur = 10; }
   if (bg) { g.fillStyle = bg; g.beginPath(); g.roundRect(0, 0, w, h, 16); g.fill(); }
   g.fillStyle = color; g.textBaseline = 'middle'; g.textAlign = 'center';
   g.fillText(text, w / 2, h / 2);
@@ -95,10 +118,12 @@ export function label(text, { color = '#f4f1ea', size = 1, font = 'bold 64px Int
 }
 
 // ---------- Figuren & Fahrzeuge (alle schauen in +X) ----------
-export function figure({ color = P.grey, head = P.skin, helmet = null, scale = 1, glow = null } = {}) {
+export function figure({ color = P.grey, head = P.skin, helmet = null, scale = 1, glow = null, strength = ROLE.strength } = {}) {
   const g = new THREE.Group();
-  const bodyMat = glow ? mat(color, { emissive: glow, emissiveIntensity: 1.1 }) : color;
-  const legL = cyl(.09, .09, .5, P.darkGrey, 8); legL.position.set(0, .25, -.12);
+  const gm = glow ? glowMat(glow, strength) : null;
+  const bodyMat = gm || color;
+  if (gm) { head = gm; helmet = helmet ? gm : null; }
+  const legL = cyl(.09, .09, .5, gm || P.darkGrey, 8); legL.position.set(0, .25, -.12);
   const legR = legL.clone(); legR.position.z = .12;
   const body = mesh(new THREE.CapsuleGeometry(.22, .45, 4, 10), bodyMat); body.position.y = .85;
   const hd = sphere(.17, head, 12); hd.position.y = 1.37;
@@ -119,7 +144,7 @@ export function figure({ color = P.grey, head = P.skin, helmet = null, scale = 1
 
 export function tank(color = P.grey, glow = null) {
   const g = new THREE.Group();
-  if (glow) color = mat(color, { emissive: glow, emissiveIntensity: .9 });
+  if (glow) color = glowMat(glow);
   const hull = box(2.6, .7, 1.5, color); hull.position.y = .65;
   const trL = box(2.8, .5, .4, P.black); trL.position.set(0, .3, -.75);
   const trR = trL.clone(); trR.position.z = .75;
@@ -242,9 +267,9 @@ export function cloud(r, color = P.white, s = 1) {
 }
 
 // ---------- Pfeile / Karten ----------
-export function arrow(length, color, { width = .5, height = .25, glow = .5 } = {}) {
+export function arrow(length, color, { width = .5, height = .25, glow = 1 } = {}) {
   const g = new THREE.Group();
-  if (glow > 0) color = mat(color, { emissive: color, emissiveIntensity: glow });
+  if (glow > 0) color = glowMat(color, 1 + glow);
   const shaft = box(1, height, width, color); shaft.position.x = .5;
   const head = mesh(new THREE.ConeGeometry(width, width * 1.4, 4), color); head.rotation.z = -Math.PI / 2; head.rotation.y = Math.PI / 4;
   g.add(shaft, head);
@@ -274,19 +299,115 @@ export const EUROPE = {
 };
 export const PLACES = { berlin: [13.4, 52.5], stalingrad: [44.5, 48.7], normandie: [-0.8, 49.3], moskau: [37.6, 55.8], london: [-0.1, 51.5], rom: [12.5, 41.9], paris: [2.3, 48.9] };
 
-export function europeMap({ scale = 0.9, depth = .35, land = P.sand, sea = P.water, highlight = {}, center = [10, 50] } = {}) {
+// Prozedurale Geländetextur (dunkles, entsättigtes Satellitenbild)
+let _terrainTex = null;
+export function terrainTexture(seed = 7, size = 512) {
+  if (_terrainTex) return _terrainTex;
+  const r = rng(seed);
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const g = c.getContext('2d');
+  const img = g.createImageData(size, size);
+  // Wertrauschen in 5 Oktaven
+  const oct = [];
+  for (let o = 0; o < 5; o++) { const n = 4 << o; const grid = new Float32Array(n * n); for (let i = 0; i < grid.length; i++) grid[i] = r(); oct.push({ n, grid }); }
+  const sample = (grid, n, x, y) => {
+    const xi = Math.floor(x) % n, yi = Math.floor(y) % n, xf = x - Math.floor(x), yf = y - Math.floor(y);
+    const a = grid[yi * n + xi], b = grid[yi * n + (xi + 1) % n], c2 = grid[((yi + 1) % n) * n + xi], d = grid[((yi + 1) % n) * n + (xi + 1) % n];
+    const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+    return (a * (1 - u) + b * u) * (1 - v) + (c2 * (1 - u) + d * u) * v;
+  };
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    let v = 0, amp = 1, tot = 0;
+    for (const { n, grid } of oct) { v += sample(grid, n, x / size * n, y / size * n) * amp; tot += amp; amp *= .55; }
+    v /= tot; v = (0.45 + 0.55 * v) * 255;
+    const i = (y * size + x) * 4; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace;
+  _terrainTex = t; return t;
+}
+
+// Flaches Band entlang eines geschlossenen Polygons (weiße Grenzlinien, in WebGL sind Linien sonst immer 1px)
+export function ribbon(points, width, material, y = 0) {
+  const pos = [];
+  const n = points.length;
+  for (let i = 0; i < n; i++) {
+    const a = points[i], b = points[(i + 1) % n];
+    const dx = b.x - a.x, dz = b.z - a.z, L = Math.hypot(dx, dz) || 1;
+    const nx = -dz / L * width / 2, nz = dx / L * width / 2;
+    pos.push(a.x + nx, y, a.z + nz, b.x + nx, y, b.z + nz, b.x - nx, y, b.z - nz,
+             a.x + nx, y, a.z + nz, b.x - nx, y, b.z - nz, a.x - nx, y, a.z - nz);
+    // kleines Quadrat an der Ecke, damit keine Lücken entstehen
+    const w = width / 2;
+    pos.push(a.x - w, y, a.z - w, a.x + w, y, a.z - w, a.x + w, y, a.z + w, a.x - w, y, a.z - w, a.x + w, y, a.z + w, a.x - w, y, a.z + w);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, material); m.castShadow = m.receiveShadow = false;
+  return m;
+}
+
+// Dünner, leicht leuchtender Pfeil entlang einer Kurve (rote Pfeile der Videokarten); userData.setProgress(0..1)
+export function curvedArrow(points, color = ROLE.axis, { radius = .07, head = .45, strength = 2.2, lift = .12 } = {}) {
+  const g = new THREE.Group();
+  const curve = new THREE.CatmullRomCurve3(points.map(v => v.clone().setY(v.y + lift)));
+  const geo = new THREE.TubeGeometry(curve, 48, radius, 6, false);
+  const m = glowMat(color, strength);
+  const tube = new THREE.Mesh(geo, m); tube.castShadow = false;
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(radius * 3.2, head, 10), m); cone.castShadow = false;
+  g.add(tube, cone);
+  const total = geo.index.count, tmp = new THREE.Vector3();
+  g.userData.setProgress = u => {
+    u = clamp(u, 0, 1);
+    geo.setDrawRange(0, Math.floor(total * u));
+    curve.getPoint(u, cone.position); curve.getTangent(u, tmp);
+    cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tmp.normalize());
+    g.visible = u > .01;
+  };
+  g.userData.setProgress(1);
+  return g;
+}
+
+// Europakarte im Videostil: dunkles Gelände, flache Länder, weiße Grenzbänder, rote Flächen für Gegner
+export function europeMap({ scale = 0.9, land = '#767b82', sea = '#262a2e', highlight = {}, center = [10, 50], outline = '#c9d0d8', outlineWidth = .11, outlineStrength = 1.0, texture = true } = {}) {
   const g = new THREE.Group();
   const project = (lon, lat) => new THREE.Vector3((lon - center[0]) * scale, 0, -(lat - center[1]) * scale * 1.55);
   const countries = {};
+  const tex = texture ? terrainTexture() : null;
+  const lineMat = glowMat(outline, outlineStrength);
   for (const [name, pts] of Object.entries(EUROPE)) {
-    const shape = new THREE.Shape(pts.map(([lon, lat]) => { const v = project(lon, lat); return new THREE.Vector2(v.x, -v.z); }));
-    const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
-    const m = mesh(geo, highlight[name] || land);
-    m.rotation.x = -Math.PI / 2;
+    const v3 = pts.map(([lon, lat]) => project(lon, lat));
+    const shape = new THREE.Shape(v3.map(v => new THREE.Vector2(v.x, -v.z)));
+    const geo = new THREE.ShapeGeometry(shape, 1);
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: highlight[name] || land, map: tex }));
+    m.rotation.x = -Math.PI / 2; m.position.y = .01; m.receiveShadow = true;
+    // Textur in Weltkoordinaten wiederholen
+    const uv = geo.attributes.uv, posA = geo.attributes.position;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, posA.getX(i) / 18, posA.getY(i) / 18);
     countries[name] = m; g.add(m);
+    if (outline) { const rb = ribbon(v3, outlineWidth, lineMat, .03); g.add(rb); m.userData.outline = rb; }
   }
-  const water = ground(140, sea); water.position.y = -.02; water.receiveShadow = true; g.add(water);
-  g.userData = { project, countries, depth };
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(160, 160, 1, 1), new THREE.MeshBasicMaterial({ color: sea, map: tex }));
+  water.rotation.x = -Math.PI / 2; water.position.y = -.02; water.receiveShadow = true;
+  const wuv = water.geometry.attributes.uv; for (let i = 0; i < wuv.count; i++) wuv.setXY(i, wuv.getX(i) * 9, wuv.getY(i) * 9);
+  g.add(water);
+  g.userData = { project, countries, depth: .02, lineMat,
+    // Stadtmarker: kleiner weißer Punkt + Serifenbeschriftung
+    city(lon, lat, text, { size = .9, dot = .14, dx = 0, dz = -.9 } = {}) {
+      const v = project(lon, lat);
+      const d = new THREE.Mesh(new THREE.CircleGeometry(dot, 16), glowMat('#ffffff', 1.3)); d.rotation.x = -Math.PI / 2; d.position.set(v.x, .05, v.z);
+      const l = label(text, { size, font: "500 56px 'Cormorant Garamond', Georgia, serif" }); l.position.set(v.x + dx, .8, v.z + dz);
+      g.add(d, l); return { dot: d, label: l };
+    },
+    // Ländername: Großbuchstaben mit Sperrung
+    country(lon, lat, text, size = 1.6) {
+      const v = project(lon, lat);
+      const l = label(text, { size, font: "500 60px 'Cormorant Garamond', Georgia, serif", upper: true, spacing: 8 }); l.position.set(v.x, 1.2, v.z);
+      g.add(l); return l;
+    }
+  };
   return g;
 }
 
@@ -296,16 +417,16 @@ export function latLon(lat, lon, R) {
   return new THREE.Vector3(-R * Math.sin(phi) * Math.cos(theta), R * Math.cos(phi), R * Math.sin(phi) * Math.sin(theta));
 }
 const LAND = [[45, -100, 1.1], [35, -112, .7], [55, -80, .8], [30, -92, .6], [62, -105, .7], [20, -100, .45], [8, -72, .5], [-8, -58, .9], [-25, -62, .7], [-40, -68, .4], [5, 20, 1.0], [-12, 25, .8], [25, 10, .9], [-28, 24, .5], [50, 20, .8], [55, 45, 1.0], [45, 70, 1.0], [60, 100, 1.1], [45, 105, .9], [65, 130, .9], [25, 80, .55], [30, 105, .7], [22, 100, .4], [36, 138, .3], [-25, 135, .85], [64, -42, .5]];
-export function globe(R = 5, { ocean = P.water, land = P.sand, grid = true } = {}) {
+export function globe(R = 5, { ocean = '#0e1520', land = '#6a6f76', grid = true } = {}) {
   const g = new THREE.Group();
   const s = sphere(R, ocean, 48); s.castShadow = false; g.add(s);
   for (const [lat, lon, k] of LAND) {
     const r = k * R * .32;
-    const b = mesh(new THREE.SphereGeometry(r, 14, 10), land);
+    const b = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 10), new THREE.MeshBasicMaterial({ color: land, map: terrainTexture() }));
     b.position.copy(latLon(lat, lon, R - r * .82)); b.castShadow = false; g.add(b);
   }
   if (grid) {
-    const w = new THREE.Mesh(new THREE.SphereGeometry(R * 1.002, 24, 12), new THREE.MeshBasicMaterial({ color: '#ffffff', wireframe: true, transparent: true, opacity: .08 }));
+    const w = new THREE.Mesh(new THREE.SphereGeometry(R * 1.002, 24, 12), new THREE.MeshBasicMaterial({ color: '#ffffff', wireframe: true, transparent: true, opacity: .12 }));
     g.add(w);
   }
   g.userData.marker = (lat, lon, color, r = .18) => {
@@ -317,7 +438,7 @@ export function globe(R = 5, { ocean = P.water, land = P.sand, grid = true } = {
     const mid = p0.clone().add(p2).multiplyScalar(.5).normalize().multiplyScalar(R * lift);
     const curve = new THREE.QuadraticBezierCurve3(p0, mid, p2);
     const geo = new THREE.TubeGeometry(curve, 48, radius, 6, false);
-    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color }));
+    const m = new THREE.Mesh(geo, glowMat(color, 1.8));
     m.userData.total = geo.index.count;
     m.userData.setProgress = u => { geo.setDrawRange(0, Math.floor(m.userData.total * clamp(u, 0, 1))); m.visible = u > 0; };
     m.userData.setProgress(0);
@@ -330,8 +451,8 @@ export function globe(R = 5, { ocean = P.water, land = P.sand, grid = true } = {
 // ---------- Effekte ----------
 export function explosion({ color = P.orange, smoke = P.darkGrey, size = 1, duration = 1.6 } = {}) {
   const g = new THREE.Group();
-  const core = mesh(new THREE.SphereGeometry(1, 12, 8), new THREE.MeshBasicMaterial({ color }));
-  const ring = mesh(new THREE.SphereGeometry(1, 12, 8), new THREE.MeshBasicMaterial({ color: smoke, transparent: true, opacity: .8 }));
+  const core = mesh(new THREE.SphereGeometry(1, 12, 8), glowMat(color, 1.7));
+  const ring = mesh(new THREE.SphereGeometry(1, 12, 8), new THREE.MeshBasicMaterial({ color: smoke, transparent: true, opacity: .5 }));
   const flash = new THREE.PointLight(color, 0, 20);
   core.castShadow = ring.castShadow = false;
   g.add(core, ring, flash); g.visible = false;
@@ -341,7 +462,7 @@ export function explosion({ color = P.orange, smoke = P.darkGrey, size = 1, dura
     const u = age / duration;
     core.scale.setScalar(size * easeOut(u * 3) * (1 - easeIn(u)) + .001);
     ring.scale.setScalar(size * (.6 + 1.6 * easeOut(u)) + .001);
-    ring.material.opacity = .8 * (1 - u);
+    ring.material.opacity = .5 * (1 - u);
     ring.position.y = size * u * 1.2;
     flash.intensity = size * 40 * Math.max(0, 1 - u * 4);
   };

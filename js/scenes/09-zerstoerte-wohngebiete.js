@@ -11,14 +11,15 @@ export default {
     civilians: { type: 'number', min: 0, max: 20, step: 1, value: 6, label: 'Zivilisten' },
     smoke: { type: 'number', min: 0, max: 12, step: 1, value: 5, label: 'Rauchsäulen' },
     dust: { type: 'number', min: 0, max: 2000, step: 50, value: 500, label: 'Staub' },
-    skyColor: { type: 'color', value: '#b8b2a6', label: 'Himmel' },
-    groundColor: { type: 'color', value: '#6f6a62', label: 'Boden' },
-    ruinColor: { type: 'color', value: '#8d7f72', label: 'Ruinen' },
-    ...H.cameraParams([-20, 3.6, 5], [-9, 3.2, 4.5], [6, 1.8, -1.5], 42)
+    skyColor: { type: 'color', value: '#161a21', label: 'Himmel' },
+    groundColor: { type: 'color', value: '#5d6670', label: 'Boden' },
+    ruinColor: { type: 'color', value: '#4a5059', label: 'Ruinen' },
+    ...H.cameraParams([-14, 12, 12], [-6, 10, 9], [2, 0, -1], 42)
   },
   build({ scene, params: p, rng: r, shadows }) {
     H.sky(scene, p.skyColor, 18, 70);
-    H.lights(scene, { sun: [6, 12, 8], intensity: .8, hemi: .9, shadows, skyColor: p.skyColor, groundColor: '#443', shadowSize: 40 });
+    H.lights(scene, { sun: [6, 12, 8], intensity: .5, hemi: .5, shadows, skyColor: '#8fa3bb', groundColor: '#223', shadowSize: 40 });
+    H.lightPool(scene, { x: -2, z: 0, radius: 12, height: 28, intensity: 160 });
     scene.add(H.ground(200, p.groundColor));
     const cols = [p.ruinColor, '#7a6e64', '#9a8e80', '#5f5750'];
     const smokes = [];
@@ -43,7 +44,7 @@ export default {
     const civ = ['#6b5b4a', '#4e5f7a', '#7a6e5a', '#5a6a5c', '#3d3a3f', '#8a7a6a'];
     const people = [];
     for (let i = 0; i < p.civilians; i++) {
-      const f = H.figure({ color: civ[i % civ.length], scale: r() < .25 ? .7 : 1 });
+      const f = H.figure({ color: civ[i % civ.length], scale: r() < .25 ? .7 : 1, glow: H.ROLE.civil, strength: 1.3 });
       const walking = r() < .5;
       f.position.set(-20 + r() * 36, 0, -4 + r() * 8); f.rotation.y = walking ? Math.PI : r() * 6.28;
       scene.add(f); people.push({ f, walking, ph: r() * 6, x0: f.position.x });

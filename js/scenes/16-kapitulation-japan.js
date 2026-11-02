@@ -10,14 +10,15 @@ export default {
     tSign: { type: 'number', min: 0, max: 10, step: .1, value: 1.5, label: 'Unterschrift ab (s)' },
     signDur: { type: 'number', min: .5, max: 8, step: .1, value: 4, label: 'Unterschrift Dauer (s)' },
     sailors: { type: 'number', min: 0, max: 30, step: 1, value: 14, label: 'Matrosen' },
-    skyColor: { type: 'color', value: '#b9cad6', label: 'Himmel' },
-    waterColor: { type: 'color', value: '#3e6f8c', label: 'Wasser' },
+    skyColor: { type: 'color', value: '#1a2430', label: 'Himmel' },
+    waterColor: { type: 'color', value: '#1c2f40', label: 'Wasser' },
     shipColor: { type: 'color', value: '#737b85', label: 'Schiff' },
     ...H.cameraParams([-7, 3.2, 11], [-3, 2.6, 7.5], [0, 1.3, 0], 38)
   },
   build({ scene, params: p, rng: r, shadows }) {
     H.sky(scene, p.skyColor, 40, 140);
-    H.lights(scene, { sun: [-8, 16, 10], intensity: 1.3, hemi: .9, shadows, skyColor: p.skyColor, groundColor: '#556', shadowSize: 40 });
+    H.lights(scene, { sun: [-8, 16, 10], intensity: .7, hemi: .5, shadows, skyColor: '#8fa3bb', groundColor: '#223', shadowSize: 40 });
+    H.lightPool(scene, { x: 0, z: 0, radius: 9, height: 24, intensity: 120 });
     const water = H.wavePlane(200, 200, 48, p.waterColor, { amp: .1 }); water.position.y = -3; scene.add(water);
     for (let i = 0; i < 6; i++) { const c = H.cloud(r, P.white, 2.5); c.position.set(-60 + r() * 120, 18 + r() * 8, -60 - r() * 30); scene.add(c); }
     // Deck und Aufbauten
@@ -36,13 +37,13 @@ export default {
     const cloth = H.box(3.1, .03, 1.25, '#3e5a3a'); cloth.position.set(0, .85, 0); scene.add(cloth);
     const pap = H.paper(.7, .9); pap.position.set(0, .88, .1); scene.add(pap);
     const sig = H.signing(pap, P.black);
-    const signer = H.figure({ color: '#2a2b30', head: '#c9a98d' }); signer.position.set(0, 0, 1.2); signer.rotation.y = -Math.PI / 2; scene.add(signer);
+    const signer = H.figure({ color: '#2a2b30', glow: H.ROLE.axis }); signer.position.set(0, 0, 1.2); signer.rotation.y = -Math.PI / 2; scene.add(signer);
     const [, , , , armL, armR] = signer.children;
     const officers = ['#6b6f58', '#f0efe8', '#6b6f58', '#f0efe8', '#4a4f44'];
-    officers.forEach((c, i) => { const f = H.figure({ color: c, head: r() < .6 ? P.skin : '#c9a98d' }); f.position.set(-2.4 + i * 1.2, 0, -1.2); f.rotation.y = Math.PI / 2; scene.add(f); });
+    officers.forEach((c, i) => { const f = H.figure({ color: c, glow: H.ROLE.west }); f.position.set(-2.4 + i * 1.2, 0, -1.2); f.rotation.y = Math.PI / 2; scene.add(f); });
     const sailors = [];
     for (let i = 0; i < p.sailors; i++) {
-      const f = H.figure({ color: '#f0efe8', head: P.skin, scale: .9 });
+      const f = H.figure({ color: '#f0efe8', scale: .9, glow: H.ROLE.civil, strength: 1.2 });
       f.position.set(-14 + r() * 28, 0, -4 - r() * 3); f.rotation.y = Math.PI / 2 + (r() - .5) * .4; scene.add(f); sailors.push({ f, ph: r() * 6 });
     }
     return {

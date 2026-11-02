@@ -12,6 +12,7 @@ export default {
     banners: { type: 'number', min: 0, max: 9, step: 1, value: 5, label: 'Banner' },
     bannerColor: { type: 'color', value: '#b23a2f', label: 'Bannerfarbe' },
     speakerGlow: { type: 'boolean', value: true, label: 'Redner leuchtet rot' },
+    crowdGlow: { type: 'boolean', value: true, label: 'Publikum als weiße Silhouetten' },
     wallColor: { type: 'color', value: '#2a2d35', label: 'Wand' },
     crowdColor: { type: 'color', value: '#5b5f6a', label: 'Publikum' },
     tRaise: { type: 'number', min: 0, max: 10, step: .1, value: 3.8, label: 'Arme hoch ab (s)' },
@@ -28,7 +29,7 @@ export default {
     }
     const stage = H.box(22, 1.4, 6, '#33363e'); stage.position.set(0, .7, -9); scene.add(stage);
     const podium = H.box(1.6, 1.3, 1, '#4a4038'); podium.position.set(0, 2.05, -8); scene.add(podium);
-    const speaker = H.figure({ color: '#1c1d22', head: P.skin, glow: p.speakerGlow ? '#8a1f1a' : null }); speaker.position.set(0, 1.4, -8.8); speaker.rotation.y = Math.PI / 2; scene.add(speaker);
+    const speaker = H.figure({ color: '#1c1d22', head: P.skin, glow: p.speakerGlow ? H.ROLE.axis : null }); speaker.position.set(0, 1.4, -8.8); speaker.rotation.y = Math.PI / 2; scene.add(speaker);
     const [, , , , armL, armR] = speaker.children;
     const mics = H.cyl(.03, .03, .6, P.black, 6); mics.position.set(0, 3.0, -7.6); scene.add(mics);
     for (const x of [-7, 7]) {
@@ -41,7 +42,7 @@ export default {
     }
     const crowd = [];
     for (let i = 0; i < p.rows; i++) for (let j = 0; j < p.cols; j++) {
-      const f = H.figure({ color: p.crowdColor, head: r() < .5 ? P.skin : '#c9a98d' });
+      const f = H.figure({ color: p.crowdColor, glow: p.crowdGlow ? H.ROLE.civil : null, strength: 1.0 });
       f.position.set((j - (p.cols - 1) / 2) * 1.4 + (r() - .5) * .5, 0, 2 - i * 1.7 + (r() - .5) * .5);
       f.rotation.y = Math.PI / 2 + (r() - .5) * .3; scene.add(f);
       crowd.push({ f, arms: [f.children[4], f.children[5]], ph: r() * 6, delay: r() * .8 });

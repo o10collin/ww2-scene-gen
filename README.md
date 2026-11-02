@@ -72,6 +72,16 @@ das aktuelle Bild als PNG (z. B. für Thumbnails).
 Tipp für Szene 15 (Atombombe): einmal mit Bauchbinde „Hiroshima / 6. August 1945“ exportieren,
 dann die Bauchbinde auf „Nagasaki / 9. August 1945“ ändern und erneut exportieren.
 
+## Look (Referenz: Simplicissimus)
+
+Der Standard-Look folgt dem Animationsstil des Kanals: kalte, blaugraue Minimalkulissen mit Lichtkegeln am
+Boden, Figuren als einfarbig leuchtende Silhouetten (Rollenfarben unter „Global → Rollenfarben“: Achse rot,
+Westalliierte blau, Sowjetunion gelb, Zivilisten weiß), Bloom, Filmkorn, Vignette und eine kleine
+Serifen-Bauchbinde unten links (Datum über Ort). Karten sind dunkle Geländetexturen mit weißen Grenzbändern,
+roten Flächen für gegnerisches Gebiet, gesperrten Ländernamen und leuchtenden Pfeilen. Alles ist unter
+„Global → Bild / Look / Text“ einstellbar, der frühere helle Comic-Look ist über Shading „toon“,
+Abdunkeln 0 und Bloom 0 wieder erreichbar.
+
 ## Eigene Szenen
 
 Jede Szene ist eine Datei in `js/scenes/` und wird in `js/scenes/index.js` registriert.

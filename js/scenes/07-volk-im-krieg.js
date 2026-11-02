@@ -17,8 +17,8 @@ export default {
     ...H.cameraParams([-8, 3.6, 9.5], [6, 3.6, 9.5], [1.5, -1.6, -8], 40)
   },
   build({ scene, params: p, rng: r, shadows }) {
-    H.sky(scene, '#2a2a2e', 30, 90);
-    H.lights(scene, { sun: [-6, 14, 10], intensity: 1.5, hemi: 1.1, shadows, skyColor: '#ddd0b0', groundColor: '#222', shadowSize: 30 });
+    H.sky(scene, '#0e1116', 30, 90);
+    H.lights(scene, { sun: [-6, 14, 10], intensity: .9, hemi: .6, shadows, skyColor: '#ddd0b0', groundColor: '#222', shadowSize: 30 });
     scene.add(H.ground(120, p.floorColor));
     const wall = H.box(60, 14, 1, p.wallColor); wall.position.set(0, 7, -8); scene.add(wall);
     for (let i = 0; i < 9; i++) {
@@ -50,7 +50,7 @@ export default {
     const civ = ['#6b5b4a', '#4e5f7a', '#7a6e5a', '#5a6a5c', '#8a7a6a'];
     for (let i = 0; i < p.workers; i++) {
       const youth = r() < p.youthShare;
-      const f = H.figure({ color: civ[i % civ.length], scale: youth ? .72 : 1 });
+      const f = H.figure({ color: civ[i % civ.length], scale: youth ? .72 : 1, glow: H.ROLE.civil, strength: 1.3 });
       const side = i % 2 ? 1 : -1;
       f.position.set(-12 + i * (24 / p.workers) + r(), 0, side * 1.7);
       f.rotation.y = side > 0 ? Math.PI / 2 : -Math.PI / 2;
