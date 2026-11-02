@@ -134,7 +134,9 @@ export const MODEL_GROUPS = {
   kimono: ['Kimono_Male', 'Kimono_Female']
 };
 MODEL_GROUPS.human = MODEL_GROUPS.civil;
-for (const names of Object.values(MODEL_GROUPS)) for (const n of names) MODEL_FILES[n] = { url: Q + n + '.glb', ...QDEF };
+// MODEL_SUFFIX: Hosting-Umgebungen, die keine .glb ausliefern, bekommen die Dateien unter anderem Namen (z. B. '.wasm' im Artifact)
+const SUF = (typeof window !== 'undefined' && window.MODEL_SUFFIX) || '';
+for (const names of Object.values(MODEL_GROUPS)) for (const n of names) MODEL_FILES[n] = { url: Q + n + '.glb' + SUF, ...QDEF };
 const LOOP_CLIPS = new Set(['Idle', 'Walk', 'Run', 'Walk_Carry', 'Run_Carry']);
 export const MODELS = {};
 let figureMode = 'glb';           // 'glb' | 'capsule'
