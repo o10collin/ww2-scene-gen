@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { SCENES } from './scenes/index.js';
 import { GUI } from './gui.js';
 import * as H from './common.js';
@@ -12,7 +16,10 @@ const GLOBAL_SCHEMA = {
   preset: { type: 'select', options: ['1920×1080', '3840×2160', '1280×720', '1080×1920', 'Eigene'], value: '1920×1080', label: 'Auflösung', group: 'Bild' },
   width: { type: 'number', min: 320, max: 4096, step: 2, value: 1920, label: 'Breite (Eigene)', group: 'Bild' },
   height: { type: 'number', min: 320, max: 4096, step: 2, value: 1080, label: 'Höhe (Eigene)', group: 'Bild' },
-  shading: { type: 'select', options: ['toon', 'lambert'], value: 'toon', label: 'Shading', group: 'Bild' },
+  shading: { type: 'select', options: ['lambert', 'toon'], value: 'lambert', label: 'Shading', group: 'Bild' },
+  darken: { type: 'number', min: 0, max: 1, step: .05, value: .45, label: 'Abdunkeln (Himmel/Licht)', group: 'Bild' },
+  bloom: { type: 'number', min: 0, max: 2, step: .05, value: .55, label: 'Bloom (Leuchten)', group: 'Bild' },
+  bloomThreshold: { type: 'number', min: 0, max: 1, step: .01, value: .7, label: 'Bloom Schwelle', group: 'Bild' },
   shadows: { type: 'boolean', value: true, label: 'Schatten', group: 'Bild' },
   grain: { type: 'number', min: 0, max: .5, step: .01, value: .10, label: 'Filmkorn', group: 'Look' },
   vignette: { type: 'number', min: 0, max: 1, step: .01, value: .35, label: 'Vignette', group: 'Look' },
@@ -32,9 +39,11 @@ const GLOBAL_SCHEMA = {
   fps: { type: 'select', options: ['24', '25', '30', '50', '60'], value: '30', label: 'Bilder/s', group: 'Export' },
   bitrate: { type: 'number', min: 2, max: 80, step: 1, value: 20, label: 'Bitrate (Mbit/s)', group: 'Export' }
 };
-const REBUILD_GLOBAL = new Set(['shading', 'shadows']);
+const REBUILD_GLOBAL = new Set(['shading', 'shadows', 'darken']);
 const RESOLUTION_GLOBAL = new Set(['preset', 'width', 'height']);
 
+const LOOK_VERSION = '2';  // bei Änderung der Standard-Optik gespeicherte Globaleinstellungen verwerfen
+try { if (localStorage.getItem(LS + 'version') !== LOOK_VERSION) { localStorage.removeItem(LS + 'global'); localStorage.setItem(LS + 'version', LOOK_VERSION); } } catch { /* kein Speicher */ }
 const global = {};
 for (const [k, s] of Object.entries(GLOBAL_SCHEMA)) global[k] = s.value;
 Object.assign(global, load('global'));
@@ -52,6 +61,7 @@ const out = $('#out');
 const ctx = out.getContext('2d');
 let W = 1920, Hh = 1080;
 let vignetteCache = null;
+let composer = null, renderPass = null, bloomPass = null;
 const noise = [];
 
 function resolution() {
@@ -64,6 +74,12 @@ function applyResolution() {
   [W, Hh] = resolution();
   renderer.setSize(W, Hh, false);
   out.width = W; out.height = Hh;
+  if (composer) composer.dispose();
+  composer = new EffectComposer(renderer);
+  composer.setSize(W, Hh);
+  renderPass = new RenderPass(new THREE.Scene(), new THREE.PerspectiveCamera());
+  bloomPass = new UnrealBloomPass(new THREE.Vector2(W, Hh), global.bloom, .45, global.bloomThreshold);
+  composer.addPass(renderPass); composer.addPass(bloomPass); composer.addPass(new OutputPass());
   vignetteCache = null;
   if (active) { active.camera.aspect = W / Hh; active.camera.updateProjectionMatrix(); }
   $('#res').textContent = `${W} × ${Hh}`;
@@ -111,6 +127,13 @@ function loadScene(i, keepTime = false) {
   const camera = new THREE.PerspectiveCamera(params.fov || 40, W / Hh, .1, 600);
   const api = def.build({ THREE, scene, camera, params, H, rng: H.rng(def.seed || 1), shadows: global.shadows }) || {};
   active = { def, params, scene, camera, api };
+  // Abdunkeln: Himmel, Nebel und Umgebungslicht in Richtung Schwarz ziehen (dunkler Simplicissimus-Look)
+  if (global.darken > 0) {
+    const k = 1 - global.darken;
+    if (scene.background?.isColor) scene.background.multiplyScalar(k);
+    if (scene.fog) scene.fog.color.multiplyScalar(k);
+    scene.traverse(o => { if (o.isHemisphereLight || o.isAmbientLight) o.intensity *= (1 - global.darken * .7); });
+  }
   if (controls) controls.dispose();
   controls = new OrbitControls(camera, out);
   controls.enabled = state.orbit;
@@ -219,7 +242,10 @@ function composite(t) {
 function renderAt(t) {
   active.api.update?.(t, active.params);
   if (state.orbit) controls.update(); else placeCamera(t);
-  renderer.render(active.scene, active.camera);
+  renderPass.scene = active.scene; renderPass.camera = active.camera;
+  bloomPass.strength = global.bloom; bloomPass.threshold = global.bloomThreshold;
+  bloomPass.enabled = global.bloom > 0;
+  composer.render();
   composite(t);
 }
 

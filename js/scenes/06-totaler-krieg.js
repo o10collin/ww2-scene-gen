@@ -11,6 +11,7 @@ export default {
     cols: { type: 'number', min: 4, max: 24, step: 1, value: 14, label: 'Figuren pro Reihe' },
     banners: { type: 'number', min: 0, max: 9, step: 1, value: 5, label: 'Banner' },
     bannerColor: { type: 'color', value: '#b23a2f', label: 'Bannerfarbe' },
+    speakerGlow: { type: 'boolean', value: true, label: 'Redner leuchtet rot' },
     wallColor: { type: 'color', value: '#2a2d35', label: 'Wand' },
     crowdColor: { type: 'color', value: '#5b5f6a', label: 'Publikum' },
     tRaise: { type: 'number', min: 0, max: 10, step: .1, value: 3.8, label: 'Arme hoch ab (s)' },
@@ -23,11 +24,11 @@ export default {
     scene.add(H.ground(120, '#1e2026'));
     const wall = H.box(60, 24, 1, p.wallColor); wall.position.set(0, 12, -14); scene.add(wall);
     for (let i = 0; i < p.banners; i++) {
-      const b = H.box(3, 16, .1, p.bannerColor); b.position.set((i - (p.banners - 1) / 2) * 6, 11, -13.4); scene.add(b);
+      const b = H.box(3, 16, .1, H.mat(p.bannerColor, { emissive: p.bannerColor, emissiveIntensity: .45 })); b.position.set((i - (p.banners - 1) / 2) * 6, 11, -13.4); scene.add(b);
     }
     const stage = H.box(22, 1.4, 6, '#33363e'); stage.position.set(0, .7, -9); scene.add(stage);
     const podium = H.box(1.6, 1.3, 1, '#4a4038'); podium.position.set(0, 2.05, -8); scene.add(podium);
-    const speaker = H.figure({ color: '#1c1d22', head: P.skin }); speaker.position.set(0, 1.4, -8.8); speaker.rotation.y = Math.PI / 2; scene.add(speaker);
+    const speaker = H.figure({ color: '#1c1d22', head: P.skin, glow: p.speakerGlow ? '#8a1f1a' : null }); speaker.position.set(0, 1.4, -8.8); speaker.rotation.y = Math.PI / 2; scene.add(speaker);
     const [, , , , armL, armR] = speaker.children;
     const mics = H.cyl(.03, .03, .6, P.black, 6); mics.position.set(0, 3.0, -7.6); scene.add(mics);
     for (const x of [-7, 7]) {

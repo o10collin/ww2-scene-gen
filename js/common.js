@@ -95,13 +95,14 @@ export function label(text, { color = '#f4f1ea', size = 1, font = 'bold 64px Int
 }
 
 // ---------- Figuren & Fahrzeuge (alle schauen in +X) ----------
-export function figure({ color = P.grey, head = P.skin, helmet = null, scale = 1 } = {}) {
+export function figure({ color = P.grey, head = P.skin, helmet = null, scale = 1, glow = null } = {}) {
   const g = new THREE.Group();
+  const bodyMat = glow ? mat(color, { emissive: glow, emissiveIntensity: 1.1 }) : color;
   const legL = cyl(.09, .09, .5, P.darkGrey, 8); legL.position.set(0, .25, -.12);
   const legR = legL.clone(); legR.position.z = .12;
-  const body = mesh(new THREE.CapsuleGeometry(.22, .45, 4, 10), color); body.position.y = .85;
+  const body = mesh(new THREE.CapsuleGeometry(.22, .45, 4, 10), bodyMat); body.position.y = .85;
   const hd = sphere(.17, head, 12); hd.position.y = 1.37;
-  const armL = cyl(.06, .06, .45, color, 8); armL.position.set(0, .9, -.3);
+  const armL = cyl(.06, .06, .45, bodyMat, 8); armL.position.set(0, .9, -.3);
   const armR = armL.clone(); armR.position.z = .3;
   g.add(legL, legR, body, hd, armL, armR);
   if (helmet) {
@@ -116,8 +117,9 @@ export function figure({ color = P.grey, head = P.skin, helmet = null, scale = 1
   return g;
 }
 
-export function tank(color = P.grey) {
+export function tank(color = P.grey, glow = null) {
   const g = new THREE.Group();
+  if (glow) color = mat(color, { emissive: glow, emissiveIntensity: .9 });
   const hull = box(2.6, .7, 1.5, color); hull.position.y = .65;
   const trL = box(2.8, .5, .4, P.black); trL.position.set(0, .3, -.75);
   const trR = trL.clone(); trR.position.z = .75;
@@ -240,8 +242,9 @@ export function cloud(r, color = P.white, s = 1) {
 }
 
 // ---------- Pfeile / Karten ----------
-export function arrow(length, color, { width = .5, height = .25 } = {}) {
+export function arrow(length, color, { width = .5, height = .25, glow = .5 } = {}) {
   const g = new THREE.Group();
+  if (glow > 0) color = mat(color, { emissive: color, emissiveIntensity: glow });
   const shaft = box(1, height, width, color); shaft.position.x = .5;
   const head = mesh(new THREE.ConeGeometry(width, width * 1.4, 4), color); head.rotation.z = -Math.PI / 2; head.rotation.y = Math.PI / 4;
   g.add(shaft, head);

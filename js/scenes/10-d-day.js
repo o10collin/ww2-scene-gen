@@ -17,6 +17,7 @@ export default {
     waterColor: { type: 'color', value: '#4a6f84', label: 'Wasser' },
     sandColor: { type: 'color', value: '#cdbb93', label: 'Sand' },
     uniformColor: { type: 'color', value: '#6f7a5a', label: 'Uniform' },
+    glow: { type: 'boolean', value: true, label: 'Soldaten leuchten blau' },
     ...H.cameraParams([-2, 6, 26], [6, 5, 20], [8, 1, 0], 40)
   },
   build({ scene, params: p, rng: r, shadows }) {
@@ -41,7 +42,7 @@ export default {
       const c = H.landingCraft('#5d6a55'); scene.add(c);
       const soldiers = [];
       for (let k = 0; k < p.soldiersPer; k++) {
-        const f = H.figure({ color: p.uniformColor, helmet: '#4d5a3e', scale: .8 });
+        const f = H.figure({ color: p.uniformColor, helmet: '#4d5a3e', scale: .8, glow: p.glow ? '#3b6ea5' : null });
         scene.add(f); soldiers.push({ f, lag: k * .35 + r() * .2, dz: (r() - .5) * 1.0 });
       }
       crafts.push({ c, z: -18 + i * (36 / p.crafts) + r() * 3, delay: r() * 1.2, soldiers, ph: r() * 6 });

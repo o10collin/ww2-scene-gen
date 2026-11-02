@@ -35,7 +35,7 @@ export default {
       f.position.set(-2.6 + i * 1.3, 0, -1.4); f.rotation.y = Math.PI / 2; scene.add(f);
     }
     // Unterzeichnender vor dem Tisch
-    const signer = H.figure({ color: '#555a63', head: P.skin }); signer.position.set(0, 0, 1.3); signer.rotation.y = -Math.PI / 2; scene.add(signer);
+    const signer = H.figure({ color: '#555a63', head: P.skin, glow: '#3a2a2a' }); signer.position.set(0, 0, 1.3); signer.rotation.y = -Math.PI / 2; scene.add(signer);
     const [, , , , armL, armR] = signer.children;
     if (p.flags) {
       const sets = [[P.blue, P.white, P.red], [P.red, P.white, P.blue], [P.red, P.red], [P.blue, P.white, P.red]];
