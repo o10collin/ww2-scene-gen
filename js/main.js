@@ -16,6 +16,8 @@ const GLOBAL_SCHEMA = {
   preset: { type: 'select', options: ['1920×1080', '3840×2160', '1280×720', '1080×1920', 'Eigene'], value: '1920×1080', label: 'Auflösung', group: 'Bild' },
   width: { type: 'number', min: 320, max: 4096, step: 2, value: 1920, label: 'Breite (Eigene)', group: 'Bild' },
   height: { type: 'number', min: 320, max: 4096, step: 2, value: 1080, label: 'Höhe (Eigene)', group: 'Bild' },
+  figures: { type: 'select', options: ['GLB-Modelle (animiert)', 'Kapselfiguren (einfach)'], value: 'GLB-Modelle (animiert)', label: 'Figuren', group: 'Bild' },
+  proportions: { type: 'select', options: ['realistisch (gestreckt)', 'cartoon (Original)'], value: 'realistisch (gestreckt)', label: 'Figurproportionen', group: 'Bild' },
   shading: { type: 'select', options: ['lambert', 'toon'], value: 'lambert', label: 'Shading', group: 'Bild' },
   darken: { type: 'number', min: 0, max: 1, step: .05, value: .55, label: 'Abdunkeln (Himmel/Licht)', group: 'Bild' },
   bloom: { type: 'number', min: 0, max: 3, step: .05, value: .55, label: 'Bloom (Leuchten)', group: 'Bild' },
@@ -32,6 +34,7 @@ const GLOBAL_SCHEMA = {
   letterbox: { type: 'number', min: 0, max: .2, step: .005, value: 0, label: 'Letterbox', group: 'Look' },
   fadeIn: { type: 'number', min: 0, max: 3, step: .1, value: .5, label: 'Einblenden (s)', group: 'Look' },
   fadeOut: { type: 'number', min: 0, max: 3, step: .1, value: .5, label: 'Ausblenden (s)', group: 'Look' },
+  textOff: { type: 'boolean', value: false, label: 'ALLE Texte aus (für Nachbearbeitung)', group: 'Text' },
   captions: { type: 'boolean', value: true, label: 'Bauchbinde anzeigen', group: 'Text' },
   captionStyle: { type: 'select', options: ['Serif klein (Simplicissimus)', 'Groß (Sans)'], value: 'Serif klein (Simplicissimus)', label: 'Bauchbinden-Stil', group: 'Text' },
   captionSize: { type: 'number', min: .4, max: 2.5, step: .05, value: 1, label: 'Bauchbinde Größe', group: 'Text' },
@@ -46,10 +49,10 @@ const GLOBAL_SCHEMA = {
   fps: { type: 'select', options: ['24', '25', '30', '50', '60'], value: '30', label: 'Bilder/s', group: 'Export' },
   bitrate: { type: 'number', min: 2, max: 80, step: 1, value: 20, label: 'Bitrate (Mbit/s)', group: 'Export' }
 };
-const REBUILD_GLOBAL = new Set(['shading', 'shadows', 'darken', 'roleAxis', 'roleWest', 'roleSoviet', 'roleCivil', 'glowStrength']);
+const REBUILD_GLOBAL = new Set(['shading', 'shadows', 'darken', 'roleAxis', 'roleWest', 'roleSoviet', 'roleCivil', 'glowStrength', 'figures', 'textOff', 'proportions']);
 const RESOLUTION_GLOBAL = new Set(['preset', 'width', 'height']);
 
-const LOOK_VERSION = '5';  // bei Änderung der Standard-Optik gespeicherte Globaleinstellungen verwerfen
+const LOOK_VERSION = '6';  // bei Änderung der Standard-Optik gespeicherte Globaleinstellungen verwerfen
 try { if (localStorage.getItem(LS + 'version') !== LOOK_VERSION) { localStorage.removeItem(LS + 'global'); localStorage.setItem(LS + 'version', LOOK_VERSION); } } catch { /* kein Speicher */ }
 const global = {};
 for (const [k, s] of Object.entries(GLOBAL_SCHEMA)) global[k] = s.value;
@@ -130,6 +133,9 @@ function loadScene(i, keepTime = false) {
   const def = SCENES[i];
   const params = active && active.def === def ? active.params : paramsFor(def);
   H.setShading(global.shading);
+  H.setFigureMode(global.figures.startsWith('GLB') ? 'glb' : 'capsule');
+  H.setProportions(global.proportions.startsWith('real') ? 'real' : 'cartoon');
+  H.setLabels(!global.textOff);
   H.setRoles({ axis: global.roleAxis, west: global.roleWest, soviet: global.roleSoviet, civil: global.roleCivil, strength: global.glowStrength });
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(params.fov || 40, W / Hh, .1, 600);
@@ -192,7 +198,7 @@ function composite(t) {
   const s = Hh / 1080;
   const lb = Hh * global.letterbox;
 
-  if (global.captions && (p.capTitle || p.capSub)) {
+  if (!global.textOff && global.captions && (p.capTitle || p.capSub)) {
     const a = Math.min(H.span(t, global.captionDelay, global.captionDelay + .5), H.span(dur - t, .2, .8));
     if (a > 0) {
       ctx.save(); ctx.globalAlpha = a;
@@ -226,7 +232,7 @@ function composite(t) {
       }
     }
   }
-  if (global.subtitles && p.subtitle) {
+  if (!global.textOff && global.subtitles && p.subtitle) {
     const size = 34 * s * global.subtitleSize;
     ctx.font = fontFor(size, 500);
     const lines = wrap(p.subtitle, W * .7);
@@ -258,8 +264,10 @@ function composite(t) {
   if (fade > 0) { ctx.globalAlpha = fade; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, Hh); ctx.globalAlpha = 1; }
 }
 
+window.__studio = { get active() { return active; }, state, renderer, global, loadScene, renderAt };
 function renderAt(t) {
   active.api.update?.(t, active.params);
+  H.animateFigures(t);
   if (state.orbit) controls.update(); else placeCamera(t);
   renderPass.scene = active.scene; renderPass.camera = active.camera;
   bloomPass.strength = global.bloom; bloomPass.threshold = global.bloomThreshold; bloomPass.radius = global.bloomRadius;
@@ -488,6 +496,10 @@ document.fonts?.load("500 30px 'Cormorant Garamond'").catch(() => {});
 buildSceneList();
 buildGlobalGui();
 applyResolution();
-const startIndex = Math.min(SCENES.length - 1, +(location.hash.slice(1)) - 1 || 0);
-loadScene(startIndex >= 0 ? startIndex : 0);
-requestAnimationFrame(frame);
+status('Lade Figurenmodelle …');
+H.preloadModels(k => status(`Modell geladen: ${k}`)).then(() => {
+  status('Bereit.');
+  const startIndex = Math.min(SCENES.length - 1, +(location.hash.slice(1)) - 1 || 0);
+  loadScene(startIndex >= 0 ? startIndex : 0);
+  requestAnimationFrame(frame);
+});

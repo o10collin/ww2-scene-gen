@@ -1,6 +1,8 @@
 // Gemeinsame Hilfsfunktionen für alle Szenen.
 // Alles ist deterministisch: Zufall nur über rng(seed), Animation nur als Funktion der Zeit t.
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 
 export const P = {
   ink: '#23262d', paper: '#e9e1cf', night: '#141923', sky: '#a7bfcf', dawn: '#e9a97b', dusk: '#6b5b7b',
@@ -114,31 +116,131 @@ export function label(text, { color = '#f4f1ea', size = 1, font = "500 60px 'Cor
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: depth }));
   s.scale.set(size * w / h, size, 1);
   s.renderOrder = 10;
+  if (!labelsOn) s.visible = false;
   return s;
 }
 
 // ---------- Figuren & Fahrzeuge (alle schauen in +X) ----------
-export function figure({ color = P.grey, head = P.skin, helmet = null, scale = 1, glow = null, strength = ROLE.strength } = {}) {
+// ---------- Figurenmodelle (GLB, animiert) ----------
+// Quaternius „Ultimate Animated Characters“ (CC0): ca. 3,25 Einheiten hoch, Füße bei y=0, Blick in +Z
+const Q = 'assets/models/quaternius/';
+const QDEF = { height: 1.75, nativeHeight: 1.9, idle: 'Idle', walk: 'Walk', run: 'Run', forward: 0 };
+export const MODEL_FILES = {};
+export const MODEL_GROUPS = {
+  soldier: ['Soldier_Male', 'Soldier_Female'],
+  civil: ['Casual_Male', 'Casual_Female', 'Casual2_Male', 'Casual2_Female', 'Casual3_Male', 'Casual3_Female', 'OldClassy_Male', 'OldClassy_Female'],
+  worker: ['Worker_Male', 'Worker_Female'],
+  suit: ['Suit_Male', 'Suit_Female'],
+  kimono: ['Kimono_Male', 'Kimono_Female']
+};
+MODEL_GROUPS.human = MODEL_GROUPS.civil;
+for (const names of Object.values(MODEL_GROUPS)) for (const n of names) MODEL_FILES[n] = { url: Q + n + '.glb', ...QDEF };
+const LOOP_CLIPS = new Set(['Idle', 'Walk', 'Run', 'Walk_Carry', 'Run_Carry']);
+export const MODELS = {};
+let figureMode = 'glb';           // 'glb' | 'capsule'
+let proportions = 'real';         // 'real' | 'cartoon' – Quaternius-Figuren sind Chibi-artig, 'real' streckt sie
+export function setProportions(m) { proportions = m; }
+let labelsOn = true;
+const FIGURES = new Set();        // alle animierten Figuren der aktuellen Szene
+export function setFigureMode(m) { figureMode = m; }
+export function setLabels(on) { labelsOn = on; }
+export async function preloadModels(onProgress) {
+  const loader = new GLTFLoader();
+  for (const [key, def] of Object.entries(MODEL_FILES)) {
+    if (MODELS[key]) continue;
+    try {
+      const gltf = await loader.loadAsync(def.url);
+      // Skalierungs-Tracks entfernen, damit Proportionsänderungen an den Knochen nicht überschrieben werden
+      for (const c of gltf.animations) c.tracks = c.tracks.filter(tr => !tr.name.endsWith('.scale'));
+      // Mixamo-Modelle aus den three.js-Beispielen sind ca. 1,8 Einheiten hoch (Meter)
+      MODELS[key] = { scene: gltf.scene, clips: gltf.animations, scale: def.height / def.nativeHeight, def, minY: 0 };
+      onProgress?.(key);
+    } catch (e) { console.warn('Modell nicht ladbar', key, e); }
+  }
+  return MODELS;
+}
+let frameId = 0;
+export function animateFigures(t) {
+  frameId++;
+  for (const f of FIGURES) {
+    const u = f.userData;
+    if (!u.mixer) continue;
+    if (u.drivenFrame !== frameId) u.play(u.idleName, t * u.speed + u.offset, 1);
+  }
+}
+export function markDriven(f) { f.userData.drivenFrame = frameId + 1; }
+
+export function figure({ color = P.grey, head = P.skin, helmet = null, scale = 1, glow = null, strength = ROLE.strength, model = 'auto', pose = null, seed = 0, loopPose = false } = {}) {
   const g = new THREE.Group();
   const gm = glow ? glowMat(glow, strength) : null;
-  const bodyMat = gm || color;
-  if (gm) { head = gm; helmet = helmet ? gm : null; }
-  const legL = cyl(.09, .09, .5, gm || P.darkGrey, 8); legL.position.set(0, .25, -.12);
-  const legR = legL.clone(); legR.position.z = .12;
-  const body = mesh(new THREE.CapsuleGeometry(.22, .45, 4, 10), bodyMat); body.position.y = .85;
-  const hd = sphere(.17, head, 12); hd.position.y = 1.37;
-  const armL = cyl(.06, .06, .45, bodyMat, 8); armL.position.set(0, .9, -.3);
-  const armR = armL.clone(); armR.position.z = .3;
-  g.add(legL, legR, body, hd, armL, armR);
-  if (helmet) {
-    const h = mesh(new THREE.SphereGeometry(.2, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), helmet);
-    h.position.y = 1.38; g.add(h);
+  const groupKey = model === 'auto' ? (helmet ? 'soldier' : 'civil') : model;
+  const names = MODEL_GROUPS[groupKey] || [groupKey];
+  const n = seed || FIGURES.size + 1;
+  const key = names[n % names.length];
+  const dummyL = new THREE.Object3D(), dummyR = new THREE.Object3D();
+  if (figureMode === 'glb' && MODELS[key]) {
+    const M = MODELS[key];
+    const inst = SkeletonUtils.clone(M.scene);
+    inst.traverse(o => {
+      if (o.isMesh) {
+        o.material = gm || mat(color);
+        o.castShadow = true; o.receiveShadow = false; o.frustumCulled = false;
+      }
+    });
+    // Proportionen: Kopf kleiner, Hals/Rumpf/Beine länger -> realistischere Silhouette statt Chibi
+    let lift = 0;
+    if (proportions === 'real') {
+      const S = { Head: [.58, .58, .58], Neck: [1, 1.6, 1], Torso: [1, 1.15, 1], Abdomen: [1, 1.1, 1], UpperLegL: [1, 1.3, 1], UpperLegR: [1, 1.3, 1], UpperArmL: [1, 1.2, 1], UpperArmR: [1, 1.2, 1] };
+      inst.traverse(o => { if (o.isBone && S[o.name]) o.scale.set(...S[o.name]); });
+      lift = .36;
+    }
+    const wrap = new THREE.Group();
+    wrap.add(inst);
+    inst.scale.setScalar(M.scale * (proportions === 'real' ? .9 : 1)); inst.position.y = (-M.minY + lift) * M.scale;
+    wrap.rotation.y = Math.PI / 2 - M.def.forward;   // Blickrichtung des Modells (Winkel um Y, +Z = 0) auf +X drehen
+    g.add(wrap);
+    const mixer = new THREE.AnimationMixer(inst);
+    const actions = {};
+    for (const c of M.clips) {
+      const a = mixer.clipAction(c); a.play(); a.enabled = false; a.setEffectiveWeight(0); actions[c.name] = a;
+      if (!LOOP_CLIPS.has(c.name) && !(loopPose && c.name === pose)) { a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; }
+    }
+    g.userData.mixer = mixer; g.userData.actions = actions;
+    g.userData.idleName = pose && actions[pose] ? pose : M.def.idle;
+    g.userData.speed = 1; g.userData.offset = (n % 97) * .37;
+    g.userData.play = (name, time, weight = 1) => {
+      for (const [n, a] of Object.entries(actions)) { const on = n === name; a.enabled = on; a.setEffectiveWeight(on ? weight : 0); }
+      mixer.setTime(time);
+    };
+    g.userData.walk = (t, amp = 1) => {
+      g.userData.drivenFrame = frameId + 1;
+      g.userData.play(amp > 1.1 ? M.def.run : M.def.walk, t * (0.9 + amp * .3) + g.userData.offset, 1);
+    };
+    g.userData.pose = (name, time) => { g.userData.drivenFrame = frameId + 1; g.userData.play(actions[name] ? name : M.def.idle, time, 1); };
+    FIGURES.add(g);
+  } else {
+    const bodyMat = gm || color;
+    if (gm) { head = gm; helmet = helmet ? gm : null; }
+    const legL = cyl(.09, .09, .5, gm || P.darkGrey, 8); legL.position.set(0, .25, -.12);
+    const legR = legL.clone(); legR.position.z = .12;
+    const body = mesh(new THREE.CapsuleGeometry(.22, .45, 4, 10), bodyMat); body.position.y = .85;
+    const hd = sphere(.17, head, 12); hd.position.y = 1.37;
+    const armL = cyl(.06, .06, .45, bodyMat, 8); armL.position.set(0, .9, -.3);
+    const armR = armL.clone(); armR.position.z = .3;
+    g.add(legL, legR, body, hd, armL, armR);
+    if (helmet) {
+      const h = mesh(new THREE.SphereGeometry(.2, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), helmet);
+      h.position.y = 1.38; g.add(h);
+    }
+    g.userData.walk = (t, amp = 1) => {
+      const s = Math.sin(t * 8) * .5 * amp;
+      legL.rotation.z = s; legR.rotation.z = -s; armL.rotation.z = -s * .8; armR.rotation.z = s * .8;
+    };
+    g.userData.armL = armL; g.userData.armR = armR;
+    g.userData.pose = () => {};
   }
+  if (!g.userData.armL) { g.userData.armL = dummyL; g.userData.armR = dummyR; }
   g.scale.setScalar(scale);
-  g.userData.walk = (t, amp = 1) => {
-    const s = Math.sin(t * 8) * .5 * amp;
-    legL.rotation.z = s; legR.rotation.z = -s; armL.rotation.z = -s * .8; armR.rotation.z = s * .8;
-  };
   return g;
 }
 
@@ -174,19 +276,33 @@ export function aircraft(color = P.grey, { span: wing = 3.2, length = 2.6, engin
 
 export function ship(color = P.steel, { length = 8, beam = 1.8, guns = 2 } = {}) {
   const g = new THREE.Group();
+  const dark = new THREE.Color(color).multiplyScalar(.55);
   const hull = box(length, .9, beam, color); hull.position.y = .45;
   const bow = cone(beam / 2, 1.6, color, 4); bow.rotation.z = -Math.PI / 2; bow.rotation.x = Math.PI / 4; bow.position.set(length / 2 + .8, .45, 0);
+  const stripe = box(length * .98, .12, beam + .02, dark); stripe.position.y = .7;
   const deck = box(length * .9, .15, beam * .9, P.darkGrey); deck.position.y = .95;
   const sup = box(length * .3, 1.2, beam * .7, color); sup.position.set(-length * .05, 1.6, 0);
-  const bridge = box(length * .15, .6, beam * .5, color); bridge.position.set(-length * .02, 2.5, 0);
-  const funnel = cyl(.25, .3, 1.2, P.darkGrey, 10); funnel.position.set(-length * .22, 2.2, 0);
-  const mast = cyl(.05, .05, 2.2, P.darkGrey, 6); mast.position.set(length * .1, 3.2, 0);
-  g.add(hull, bow, deck, sup, bridge, funnel, mast);
+  const sup2 = box(length * .2, .7, beam * .55, color); sup2.position.set(-length * .04, 2.55, 0);
+  const bridge = box(length * .12, .5, beam * .6, dark); bridge.position.set(length * .03, 3.1, 0);
+  const funnel = cyl(.25, .3, 1.3, P.darkGrey, 10); funnel.position.set(-length * .22, 2.3, 0);
+  const funnelTop = cyl(.3, .25, .15, P.black, 10); funnelTop.position.set(-length * .22, 3.0, 0);
+  const mast = cyl(.05, .05, 2.6, P.darkGrey, 6); mast.position.set(length * .1, 3.6, 0);
+  const yard = box(1.2, .05, .05, P.darkGrey); yard.position.set(length * .1, 4.2, 0); yard.rotation.y = Math.PI / 2;
+  const mast2 = cyl(.04, .04, 1.8, P.darkGrey, 6); mast2.position.set(-length * .3, 2.6, 0);
+  g.add(hull, bow, stripe, deck, sup, sup2, bridge, funnel, funnelTop, mast, yard, mast2);
+  // Rettungsboote und Reling
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 2; i++) { const lb = mesh(new THREE.CapsuleGeometry(.12, .5, 3, 6), dark); lb.rotation.z = Math.PI / 2; lb.position.set(-length * .15 + i * 1.3, 1.45, side * beam * .45); g.add(lb); }
+    const rail = box(length * .88, .03, .03, P.darkGrey); rail.position.set(0, 1.35, side * beam * .44); rail.castShadow = false; g.add(rail);
+    for (let i = 0; i < Math.floor(length / 1.2); i++) { const post = cyl(.02, .02, .35, P.darkGrey, 4); post.castShadow = false; post.position.set(-length * .44 + i * 1.2, 1.2, side * beam * .44); g.add(post); }
+  }
   for (let i = 0; i < guns; i++) {
     const t = cyl(.4, .45, .4, color, 12); t.position.set(length * .3 - i * .9, 1.2, 0);
-    const b = cyl(.05, .05, 1.2, P.darkGrey, 6); b.rotation.z = -Math.PI / 2; b.position.set(length * .3 - i * .9 + .7, 1.25, 0);
-    g.add(t, b);
+    for (const dz of [-.12, .12]) { const b = cyl(.04, .05, 1.3, P.darkGrey, 6); b.rotation.z = -Math.PI / 2; b.position.set(length * .3 - i * .9 + .75, 1.28, dz); g.add(b); }
+    g.add(t);
   }
+  const aft = cyl(.4, .45, .4, color, 12); aft.position.set(-length * .4, 1.2, 0); g.add(aft);
+  const aftB = cyl(.04, .05, 1.2, P.darkGrey, 6); aftB.rotation.z = Math.PI / 2; aftB.position.set(-length * .4 - .7, 1.28, 0); g.add(aftB);
   return g;
 }
 
@@ -203,34 +319,69 @@ export function landingCraft(color = P.olive) {
 }
 
 // ---------- Gebäude / Stadt ----------
-export function building(w, h, d, color, { windows = 0, windowColor = P.yellow, lit = true } = {}) {
+export function building(w, h, d, color, { windows = 0, windowColor = P.yellow, lit = true, r = null, roof = true } = {}) {
   const g = new THREE.Group();
   const b = box(w, h, d, color); b.position.y = h / 2; g.add(b);
-  if (windows > 0) {
-    const geo = new THREE.PlaneGeometry(.35, .5);
-    const m = new THREE.MeshBasicMaterial({ color: windowColor });
-    const rows = Math.max(1, Math.floor(h / 1.2)), cols = windows;
-    const inst = new THREE.InstancedMesh(geo, m, rows * cols);
-    const o = new THREE.Object3D(); let k = 0;
-    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-      o.position.set(-w / 2 + (c + .5) * (w / cols), .8 + r * 1.2, d / 2 + .01);
-      o.updateMatrix(); inst.setMatrixAt(k++, o.matrix);
+  const dark = typeof color === 'string' ? new THREE.Color(color).multiplyScalar(.55) : P.darkGrey;
+  // Fensterreihen auf allen vier Seiten: dunkle Laibungen, optional beleuchtet
+  const rows = Math.max(1, Math.floor(h / 1.25));
+  const sides = [[w, 0, d / 2 + .02, 0], [w, 0, -d / 2 - .02, Math.PI], [d, w / 2 + .02, 0, Math.PI / 2], [d, -w / 2 - .02, 0, -Math.PI / 2]];
+  const frameGeo = new THREE.PlaneGeometry(.42, .62), paneGeo = new THREE.PlaneGeometry(.3, .5);
+  const total = sides.reduce((n, sd) => n + rows * Math.max(1, Math.floor(sd[0] / 1.1)), 0);
+  const frames = new THREE.InstancedMesh(frameGeo, mat(dark), total);
+  const panes = new THREE.InstancedMesh(paneGeo, new THREE.MeshBasicMaterial({ color: windowColor }), total);
+  const o = new THREE.Object3D(); let k = 0; let litCount = 0;
+  const rr = r || (() => .5);
+  for (const [len, px, pz, ry] of sides) {
+    const cols = Math.max(1, Math.floor(len / 1.1));
+    for (let row = 0; row < rows; row++) for (let c = 0; c < cols; c++) {
+      const u = -len / 2 + (c + .5) * (len / cols);
+      o.position.set(px + (ry === 0 || ry === Math.PI ? u : 0), .85 + row * 1.25, pz + (ry === 0 || ry === Math.PI ? 0 : u));
+      o.rotation.set(0, ry, 0); o.updateMatrix();
+      frames.setMatrixAt(k, o.matrix);
+      const on = lit && windows > 0 && rr() < .5;
+      o.scale.setScalar(on ? 1 : .0001); o.updateMatrix(); panes.setMatrixAt(k, o.matrix); o.scale.setScalar(1);
+      if (on) litCount++; k++;
     }
-    inst.visible = lit; g.add(inst); g.userData.windows = inst;
   }
+  g.add(frames, panes); g.userData.windows = panes;
+  if (roof) {
+    const par = box(w + .15, .25, d + .15, dark); par.position.y = h + .1; g.add(par);
+    const chimney = box(.5, .9, .5, dark); chimney.position.set(w * .3, h + .5, -d * .25); g.add(chimney);
+    if (rr() < .5) { const tank = cyl(.4, .4, .7, dark, 10); tank.position.set(-w * .25, h + .45, d * .2); g.add(tank); }
+  }
+  const door = box(.9, 1.6, .08, dark); door.position.set(w * .1, .8, d / 2 + .04); g.add(door);
+  const sill = box(w * .98, .12, .12, dark); sill.position.set(0, .3, d / 2 + .06); g.add(sill);
   return g;
 }
 export function ruin(w, h, d, color, r = Math.random) {
   const g = new THREE.Group();
+  const dark = new THREE.Color(color).multiplyScalar(.5);
   const cols = 3 + Math.floor(r() * 3);
+  const heights = [];
   for (let i = 0; i < cols; i++) {
-    const cw = w / cols, ch = h * (0.25 + r() * 0.75);
+    const cw = w / cols, ch = h * (0.25 + r() * 0.75); heights.push(ch);
     const b = box(cw * .98, ch, d * (0.6 + r() * .4), color);
     b.position.set(-w / 2 + (i + .5) * cw, ch / 2, 0); g.add(b);
+    // Fensterhöhlen in der Fassade
+    for (let row = 0; row < Math.floor(ch / 1.3); row++) {
+      const hole = box(cw * .45, .7, .12, dark); hole.castShadow = false;
+      hole.position.set(b.position.x, .9 + row * 1.3, b.geometry.parameters.depth / 2 + .02); g.add(hole);
+    }
+  }
+  // eingestürzte Geschossdecken und Stahlträger
+  for (let i = 0; i < 3; i++) {
+    const slab = box(w * (.3 + r() * .4), .18, d * .5, dark);
+    slab.position.set((r() - .5) * w * .6, .4 + r() * h * .4, d * .3); slab.rotation.set((r() - .5) * .6, r() * .4, (r() - .5) * .5); g.add(slab);
   }
   for (let i = 0; i < 4; i++) {
-    const s = box(.3 + r() * .5, .2 + r() * .3, .3 + r() * .5, color);
-    s.position.set((r() - .5) * w * 1.4, .15, d / 2 + .3 + r() * 1.2); s.rotation.y = r() * 3; g.add(s);
+    const bar = cyl(.03, .03, 1.2 + r() * 1.5, '#2a2a2a', 5); bar.castShadow = false;
+    bar.position.set((r() - .5) * w, heights[i % heights.length] + .4, (r() - .5) * d); bar.rotation.set((r() - .5) * 1.2, 0, (r() - .5) * 1.2); g.add(bar);
+  }
+  // Schutthaufen davor
+  for (let i = 0; i < 9; i++) {
+    const s = box(.25 + r() * .6, .15 + r() * .35, .25 + r() * .6, i % 3 ? color : dark);
+    s.position.set((r() - .5) * w * 1.4, .12, d / 2 + .2 + r() * 1.6); s.rotation.y = r() * 3; g.add(s);
   }
   return g;
 }
@@ -263,6 +414,85 @@ export function cloud(r, color = P.white, s = 1) {
     b.position.set((i - n / 2) * .8 * s, (r() - .5) * .3 * s, (r() - .5) * .5 * s);
     b.castShadow = false; g.add(b);
   }
+  return g;
+}
+
+// ---------- Requisiten ----------
+export function streetLamp(h = 4, { color = P.darkGrey, lit = true, lightColor = '#ffe2b0' } = {}) {
+  const g = new THREE.Group();
+  const pole = cyl(.06, .08, h, color, 8); pole.position.y = h / 2;
+  const arm = box(.8, .06, .06, color); arm.position.set(.35, h - .1, 0);
+  const head = box(.35, .18, .25, color); head.position.set(.7, h - .2, 0);
+  g.add(pole, arm, head);
+  if (lit) {
+    const bulb = new THREE.Mesh(new THREE.BoxGeometry(.3, .04, .2), glowMat(lightColor, 1.6)); bulb.position.set(.7, h - .3, 0); g.add(bulb);
+    const l = new THREE.PointLight(lightColor, 14, 10, 1.6); l.position.set(.7, h - .4, 0); g.add(l);
+  }
+  return g;
+}
+export function fence(length, { posts = 6, wires = 3, height = 2.2, color = P.darkGrey, barbed = true } = {}) {
+  const g = new THREE.Group();
+  for (let i = 0; i <= posts; i++) {
+    const p = cyl(.04, .05, height, color, 6); p.position.set(-length / 2 + i * (length / posts), height / 2, 0); g.add(p);
+    if (barbed) { const t = box(.06, .5, .06, color); t.position.set(p.position.x, height + .2, -.15); t.rotation.x = .6; g.add(t); }
+  }
+  for (let w = 0; w < wires; w++) {
+    const wire = cyl(.012, .012, length, '#9aa0a8', 4); wire.rotation.z = Math.PI / 2; wire.castShadow = false;
+    wire.position.set(0, height * (.35 + .3 * w / Math.max(1, wires - 1)), 0); g.add(wire);
+  }
+  if (barbed) { const top = cyl(.012, .012, length, '#9aa0a8', 4); top.rotation.z = Math.PI / 2; top.castShadow = false; top.position.set(0, height + .35, -.3); g.add(top); }
+  return g;
+}
+export function sandbags(r, n = 8, color = '#6f6650') {
+  const g = new THREE.Group();
+  for (let i = 0; i < n; i++) {
+    const b = mesh(new THREE.CapsuleGeometry(.16, .4, 3, 8), color); b.rotation.z = Math.PI / 2;
+    b.position.set((i % 4) * .55 - .8 + (i >= 4 ? .27 : 0), .16 + (i >= 4 ? .3 : 0), 0); b.rotation.y = (r() - .5) * .3; g.add(b);
+  }
+  return g;
+}
+export function crate(size = .8, color = P.brown) {
+  const g = new THREE.Group();
+  const b = box(size, size, size, color); b.position.y = size / 2; g.add(b);
+  const dark = new THREE.Color(color).multiplyScalar(.6);
+  for (const [x, y, z, rx, rz] of [[0, size / 2, size / 2 + .01, 0, Math.PI / 4], [0, size / 2, -size / 2 - .01, 0, -Math.PI / 4], [size / 2 + .01, size / 2, 0, Math.PI / 4, 0], [-size / 2 - .01, size / 2, 0, -Math.PI / 4, 0]]) {
+    const st = box(rz ? size * 1.3 : .06, .06, rx ? size * 1.3 : .06, dark); st.castShadow = false; st.position.set(x, y, z); st.rotation.set(0, 0, rz); if (rx) st.rotation.set(0, rx, 0); g.add(st);
+  }
+  return g;
+}
+export function barrel(color = P.darkGrey) {
+  const g = new THREE.Group();
+  const b = cyl(.32, .32, .9, color, 14); b.position.y = .45; g.add(b);
+  for (const y of [.2, .7]) { const ring = mesh(new THREE.TorusGeometry(.33, .025, 6, 18), P.black); ring.rotation.x = Math.PI / 2; ring.position.y = y; ring.castShadow = false; g.add(ring); }
+  return g;
+}
+export function truck(color = P.olive) {
+  const g = new THREE.Group();
+  const bed = box(2.6, 1.0, 1.5, color); bed.position.set(-.6, 1.1, 0);
+  const canvas = mesh(new THREE.CylinderGeometry(.78, .78, 2.5, 10, 1, false, 0, Math.PI), new THREE.Color(color).multiplyScalar(.8)); canvas.rotation.z = Math.PI / 2; canvas.rotation.y = Math.PI / 2; canvas.position.set(-.6, 1.6, 0);
+  const cab = box(1.1, .9, 1.4, color); cab.position.set(1.3, 1.1, 0);
+  const hood = box(.8, .6, 1.2, color); hood.position.set(2.2, .9, 0);
+  g.add(bed, canvas, cab, hood);
+  for (const x of [-1.4, -.4, 1.6]) for (const z of [-.75, .75]) { const w = cyl(.38, .38, .3, P.black, 12); w.rotation.x = Math.PI / 2; w.position.set(x, .38, z); g.add(w); }
+  return g;
+}
+export function crater(radius, color = '#2b2f36') {
+  const g = new THREE.Group();
+  const d = disc(radius, color, 20); d.position.y = .02; g.add(d);
+  const rim = mesh(new THREE.TorusGeometry(radius, radius * .18, 6, 20), new THREE.Color(color).multiplyScalar(1.6)); rim.rotation.x = Math.PI / 2; rim.position.y = .05; rim.castShadow = false; g.add(rim);
+  return g;
+}
+export function palm(h = 4) {
+  const g = new THREE.Group();
+  const trunk = cyl(.1, .16, h, '#5a4634', 7); trunk.position.y = h / 2; trunk.rotation.z = .12; g.add(trunk);
+  for (let i = 0; i < 7; i++) { const leaf = box(1.8, .05, .35, P.green); leaf.position.set(.3, h, 0); leaf.rotation.y = i / 7 * Math.PI * 2; leaf.rotation.z = -.5; leaf.position.x += Math.cos(leaf.rotation.y) * .8; leaf.position.z += Math.sin(leaf.rotation.y) * .8; g.add(leaf); }
+  return g;
+}
+export function pagodaHouse(w, d, color = '#b9aa94') {
+  const g = new THREE.Group();
+  const b = box(w, 1.6, d, color); b.position.y = .8; g.add(b);
+  const roof = mesh(new THREE.ConeGeometry(Math.max(w, d) * .85, .9, 4), '#4a4a50'); roof.rotation.y = Math.PI / 4; roof.position.y = 2.05; g.add(roof);
+  const roof2 = mesh(new THREE.ConeGeometry(Math.max(w, d) * .55, .5, 4), '#4a4a50'); roof2.rotation.y = Math.PI / 4; roof2.position.y = 2.7; g.add(roof2);
   return g;
 }
 
@@ -324,7 +554,7 @@ export function terrainTexture(seed = 7, size = 512) {
   }
   g.putImageData(img, 0, 0);
   const t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.userData.shared = true;
   _terrainTex = t; return t;
 }
 
@@ -561,11 +791,12 @@ export function cameraParams(from, to, look, fov = 40) {
 }
 
 export function disposeScene(scene) {
+  FIGURES.clear();
   scene.traverse(o => {
     if (o.geometry) o.geometry.dispose();
     if (o.material) {
       const ms = Array.isArray(o.material) ? o.material : [o.material];
-      for (const m of ms) { if (m.map) m.map.dispose(); m.dispose(); }
+      for (const m of ms) { if (m.map && !m.map.userData?.shared) m.map.dispose(); m.dispose(); }
     }
   });
 }

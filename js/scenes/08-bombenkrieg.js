@@ -10,7 +10,8 @@ export default {
     bombers: { type: 'number', min: 1, max: 15, step: 1, value: 7, label: 'Bomber' },
     bombsPer: { type: 'number', min: 0, max: 8, step: 1, value: 3, label: 'Bomben je Bomber' },
     buildings: { type: 'number', min: 10, max: 120, step: 5, value: 70, label: 'Gebäude' },
-    searchlights: { type: 'number', min: 0, max: 8, step: 1, value: 3, label: 'Suchscheinwerfer' },
+    searchlights: { type: 'number', min: 0, max: 8, step: 1, value: 4, label: 'Suchscheinwerfer' },
+    flakGuns: { type: 'number', min: 0, max: 6, step: 1, value: 3, label: 'Flak-Geschütze' },
     flak: { type: 'number', min: 0, max: 40, step: 1, value: 14, label: 'Flak-Wolken' },
     altitude: { type: 'number', min: 8, max: 40, step: 1, value: 20, label: 'Flughöhe' },
     skyColor: { type: 'color', value: '#10141e', label: 'Nachthimmel' },
@@ -56,6 +57,21 @@ export default {
       flak.push({ f, t0: r() * 9 });
     }
     const speed = 7;
+    const church = new THREE.Group();
+    const nave = H.box(8, 9, 16, '#2a2e36'); nave.position.y = 4.5; const roof = H.mesh(new THREE.CylinderGeometry(0, 5.6, 4, 4), '#1f2228'); roof.rotation.y = Math.PI / 4; roof.position.y = 11; roof.scale.z = 2.9;
+    const tower = H.box(4, 20, 4, '#2a2e36'); tower.position.set(0, 10, 10); const spire = H.cone(2.8, 8, '#1f2228', 4); spire.position.set(0, 24, 10);
+    church.add(nave, roof, tower, spire); church.position.set(8, 0, -6); scene.add(church);
+    const flaks = [];
+    for (let i = 0; i < p.flakGuns; i++) {
+      const g = new THREE.Group();
+      const base = H.cyl(1, 1.2, .5, '#2a2e36', 10); base.position.y = .25; const mount = H.box(1, .8, 1, '#2a2e36'); mount.position.y = .9;
+      const barrel = H.cyl(.08, .1, 3, '#1f2228', 8); barrel.position.set(0, 2.2, .6); barrel.rotation.x = -.5;
+      const flash = new THREE.Mesh(new THREE.SphereGeometry(.3, 8, 6), H.glowMat('#ffd27a', 2.2)); flash.position.set(0, 3.6, 1.4); flash.visible = false;
+      g.add(base, mount, barrel, flash); g.position.set(-30 + i * 22 + r() * 6, 0, 30 + r() * 10); g.rotation.y = r() * 1.5 - .7; scene.add(g);
+      flaks.push({ g, flash, ph: r() * 2 });
+    }
+    scene.userData.flaks = flaks;
+
     return {
       update(t, p) {
         for (const b of bombers) { b.b.position.set(-60 + (t * speed) - b.lag, b.y, b.z); b.b.rotation.y = Math.PI / 2; }
@@ -76,6 +92,7 @@ export default {
         }
         for (const l of lights) { l.beam.rotation.z = Math.sin(t * l.sp + l.ph) * .5; l.beam.rotation.x = Math.cos(t * l.sp * .7 + l.ph) * .45; }
         for (const f of flak) f.f.userData.at(((t - f.t0) % 4 + 4) % 4);
+        for (const fg of scene.userData.flaks) fg.flash.visible = ((t * 2 + fg.ph) % 1) < .08;
       }
     };
   }

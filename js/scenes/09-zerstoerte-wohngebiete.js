@@ -19,7 +19,7 @@ export default {
   build({ scene, params: p, rng: r, shadows }) {
     H.sky(scene, p.skyColor, 18, 70);
     H.lights(scene, { sun: [6, 12, 8], intensity: .5, hemi: .5, shadows, skyColor: '#8fa3bb', groundColor: '#223', shadowSize: 40 });
-    H.lightPool(scene, { x: -2, z: 0, radius: 12, height: 28, intensity: 160 });
+    H.lightPool(scene, { x: -2, z: 0, radius: 14, height: 28, intensity: 320 });
     scene.add(H.ground(200, p.groundColor));
     const cols = [p.ruinColor, '#7a6e64', '#9a8e80', '#5f5750'];
     const smokes = [];
@@ -44,13 +44,19 @@ export default {
     const civ = ['#6b5b4a', '#4e5f7a', '#7a6e5a', '#5a6a5c', '#3d3a3f', '#8a7a6a'];
     const people = [];
     for (let i = 0; i < p.civilians; i++) {
-      const f = H.figure({ color: civ[i % civ.length], scale: r() < .25 ? .7 : 1, glow: H.ROLE.civil, strength: 1.3 });
-      const walking = r() < .5;
+      const f = H.figure({ color: civ[i % civ.length], scale: r() < .25 ? .7 : 1, glow: H.ROLE.civil, strength: 1.3, model: 'civil', seed: i + 5, pose: i < 2 ? 'Death' : (i === 2 ? 'Defeat' : null) });
+      const walking = i > 2 && r() < .6;
       f.position.set(-20 + r() * 36, 0, -4 + r() * 8); f.rotation.y = walking ? Math.PI : r() * 6.28;
       scene.add(f); people.push({ f, walking, ph: r() * 6, x0: f.position.x });
     }
     const dust = p.dust > 0 ? H.particles(r, { count: p.dust, area: [60, 10, 30], color: '#d8d2c6', size: .1, opacity: .35 }) : null;
     if (dust) scene.add(dust);
+    for (let i = 0; i < 4; i++) { const l = H.streetLamp(4, { lit: false }); l.position.set(-30 + i * 14, 0, 5.2); l.rotation.z = (r() - .5) * .5; scene.add(l); }
+    for (let i = 0; i < 3; i++) { const c = H.crater(1.4 + r() * 1.6, '#3f464f'); c.position.set(-24 + i * 16 + r() * 6, 0, -3 + r() * 6); scene.add(c); }
+    const wreck = H.truck('#3b3f46'); wreck.position.set(6, 0, 3); wreck.rotation.set(.08, -2.1, 0); scene.add(wreck);
+    const fz = H.fence(10, { posts: 5, wires: 2, barbed: false }); fz.position.set(-12, 0, -5.5); fz.rotation.y = .2; scene.add(fz);
+    for (let i = 0; i < 4; i++) { const b = H.barrel('#4a4e57'); b.position.set(-16 + r() * 30, 0, -4 + r() * 8); b.rotation.z = r() < .5 ? Math.PI / 2 : 0; b.rotation.y = r() * 3; scene.add(b); }
+
     return {
       update(t) {
         for (const s of smokes) s.userData.at(t, .8);

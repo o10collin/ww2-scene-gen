@@ -24,8 +24,18 @@ export default {
     const L = H.lights(scene, { sun: [10, 18, 8], intensity: 1.2, hemi: .9, shadows, skyColor: p.skyColor, groundColor: '#665', shadowSize: 60 });
     scene.add(H.ground(300, '#a69c86'));
     const river = H.box(300, .05, 5, '#6d8ea3'); river.position.set(0, .02, 6); river.castShadow = false; scene.add(river);
-    const city = H.city(r, { count: p.buildings, area: 80, minH: 1.5, maxH: 6, colors: [p.cityColor, '#a79b88', '#cbbfa8', '#8f8577'], gap: 1.5, exclude: 3 });
+    const city = new THREE.Group();
+    const cols = Math.ceil(Math.sqrt(p.buildings)), cell = 80 / cols;
+    for (let i = 0; i < p.buildings; i++) {
+      const cx = (i % cols + .5) * cell - 40, cz = (Math.floor(i / cols) + .5) * cell - 40;
+      if (Math.hypot(cx, cz) < 3 || Math.abs(cz - 6) < 3) continue;
+      const w = cell - 1.6 - r() * 1.2, d = cell - 1.6 - r() * 1.2;
+      const b = r() < .7 ? H.pagodaHouse(w, d, [p.cityColor, '#a79b88', '#cbbfa8'][i % 3]) : H.building(w, 2 + r() * 4, d, '#8f8577', { r, roof: true });
+      b.position.set(cx + (r() - .5) * .6, 0, cz + (r() - .5) * .6); b.rotation.y = (r() - .5) * .2; city.add(b);
+    }
     scene.add(city);
+    for (let i = 0; i < 3; i++) { const br = H.box(1.6, .3, 7, '#6b6660'); br.position.set(-24 + i * 24, .3, 6); scene.add(br); for (const z of [2.8, 9.2]) { const rail = H.box(1.7, .4, .1, '#4a4642'); rail.position.set(br.position.x, .65, z); scene.add(rail); } }
+    for (let i = 0; i < 6; i++) { const hill = H.sphere(10 + r() * 14, '#4e5a4a', 16); hill.position.set(-70 + i * 30, -8 - r() * 3, -60 - r() * 20); hill.scale.y = .45; scene.add(hill); }
     const blds = city.children.map(b => ({ b, d: Math.hypot(b.position.x, b.position.z), ang: Math.atan2(b.position.z, b.position.x) }));
     const bomber = H.faceZ(H.aircraft(H.glowMat(H.ROLE.west, 1.6), { span: 7.5, length: 5.5, engines: 4 })); bomber.rotation.y = Math.PI / 2; scene.add(bomber);
     const bomb = H.cyl(.35, .35, 1.6, '#3a3d44', 10); bomb.castShadow = false; scene.add(bomb);

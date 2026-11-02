@@ -56,6 +56,15 @@ export default {
     const lamp = new THREE.PointLight(p.lampColor, 18, 16, 1.6); lamp.position.set(0, -5.8, -3); scene.add(lamp);
     const flash = new THREE.PointLight('#ffffff', 0, 20); flash.position.set(2, -7.5, -4); scene.add(flash);
     const from = new THREE.Vector3(), to = new THREE.Vector3(), look0 = new THREE.Vector3(), look1 = new THREE.Vector3();
+    const wallMap = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.6), new THREE.MeshLambertMaterial({ color: '#8a8673', map: H.terrainTexture() })); wallMap.position.set(-3.2, -6.6, -5.82); scene.add(wallMap);
+    const mapFrame = H.box(2.55, 1.75, .04, '#2a2420'); mapFrame.position.set(-3.2, -6.6, -5.86); scene.add(mapFrame);
+    const phone = H.box(.35, .2, .25, P.black); phone.position.set(-2.9, -8.63, -3.6); scene.add(phone);
+    const papers = H.paper(.5, .7); papers.position.set(-2.2, -8.74, -3.5); papers.rotation.y = .3; scene.add(papers);
+    for (const x of [-3.4, -1.6]) { const ch = new THREE.Group(); const seat = H.box(.5, .08, .5, '#3a2e26'); seat.position.y = -9.1; const back = H.box(.5, .6, .06, '#3a2e26'); back.position.set(0, -8.8, -.22); for (const [lx, lz] of [[-.2, -.2], [.2, -.2], [-.2, .2], [.2, .2]]) { const leg = H.box(.05, .5, .05, '#3a2e26'); leg.position.set(lx, -9.35, lz); ch.add(leg); } ch.add(seat, back); ch.position.set(x, 0, -2.8); scene.add(ch); }
+    for (const y of [-5.0, -5.2]) { const pp = H.cyl(.05, .05, 12, '#55524d', 6); pp.rotation.z = Math.PI / 2; pp.position.set(0, y, -5.7); scene.add(pp); }
+    const door2 = H.box(1.2, 2.4, .12, '#4a3a2e'); door2.position.set(-5.85, -8.2, -1.5); door2.rotation.y = Math.PI / 2; scene.add(door2);
+    const cage = new THREE.Mesh(new THREE.SphereGeometry(.26, 6, 4), new THREE.MeshBasicMaterial({ color: '#111', wireframe: true })); cage.position.set(0, -5.62, -3); scene.add(cage);
+
     return {
       update(t, p) {
         for (const s of smokes) s.userData.at(t, .7);

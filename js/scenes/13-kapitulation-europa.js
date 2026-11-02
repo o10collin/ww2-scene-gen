@@ -31,16 +31,24 @@ export default {
     // Delegationen hinter dem Tisch
     const roles = [H.ROLE.west, H.ROLE.west, H.ROLE.soviet, H.ROLE.west, H.ROLE.soviet];
     for (let i = 0; i < 5; i++) {
-      const f = H.figure({ color: P.grey, glow: roles[i] });
+      const f = H.figure({ color: P.grey, glow: roles[i], model: i % 2 ? 'suit' : 'soldier', pose: 'SitDown', seed: i + 11 });
       f.position.set(-2.6 + i * 1.3, 0, -1.4); f.rotation.y = Math.PI / 2; scene.add(f);
     }
     // Unterzeichnender vor dem Tisch
-    const signer = H.figure({ color: '#555a63', glow: H.ROLE.axis }); signer.position.set(0, 0, 1.3); signer.rotation.y = -Math.PI / 2; scene.add(signer);
-    const [, , , , armL, armR] = signer.children;
+    const signer = H.figure({ color: '#555a63', glow: H.ROLE.axis, model: 'soldier', pose: 'PickUp', seed: 7 }); signer.position.set(0, 0, 1.3); signer.rotation.y = -Math.PI / 2; scene.add(signer);
+    const armL = signer.userData.armL, armR = signer.userData.armR;
     if (p.flags) {
       const sets = [[P.blue, P.white, P.red], [P.red, P.white, P.blue], [P.red, P.red], [P.blue, P.white, P.red]];
       sets.forEach((c, i) => { const f = H.flag(c, { pole: 3.2, w: 1.2, h: .8 }); f.position.set(-4.5 + i * 3, 0, -4.5); f.rotation.y = -.2; scene.add(f); });
     }
+    for (let i = 0; i < 5; i++) { const ch = new THREE.Group(); const seat = H.box(.55, .08, .55, '#3a2e26'); seat.position.y = .5; const back = H.box(.55, .7, .06, '#3a2e26'); back.position.set(0, .9, -.25); ch.add(seat, back); ch.position.set(-2.6 + i * 1.3, 0, -1.9); scene.add(ch); }
+    for (const x of [-1.4, 1.4]) { const st = H.cyl(.015, .015, .4, P.black, 6); st.position.set(x, 1.05, -.3); scene.add(st); const mic = H.cyl(.04, .03, .12, P.black, 8); mic.position.set(x, 1.3, -.3); scene.add(mic); }
+    const carpet = H.box(10, .03, 7, '#3b2a2a'); carpet.position.set(0, .02, 0); carpet.receiveShadow = true; scene.add(carpet);
+    for (let i = 0; i < 4; i++) { const f = H.paper(.5, .7); f.position.set(-2.4 + i * 1.5, .88, -.5); f.rotation.y = (r() - .5) * .5; scene.add(f); }
+    const lampStand = H.cyl(.04, .06, 1.8, '#2a2a2a', 8); lampStand.position.set(4.2, .9, -1); scene.add(lampStand);
+    const lampShade = H.cone(.45, .5, '#4a3a2a', 12); lampShade.rotation.x = Math.PI; lampShade.position.set(4.2, 2.0, -1); scene.add(lampShade);
+    const standLight = new THREE.PointLight('#ffe0b0', 8, 8, 1.6); standLight.position.set(4.2, 1.7, -1); scene.add(standLight);
+
     return {
       update(t, p) {
         const u = H.span(t, p.tSign, p.tSign + p.signDur);

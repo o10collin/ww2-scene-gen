@@ -11,7 +11,8 @@ export default {
     germans: { type: 'number', min: 0, max: 20, step: 1, value: 7, label: 'Deutsche Soldaten' },
     soviets: { type: 'number', min: 0, max: 20, step: 1, value: 9, label: 'Rote Armee Soldaten' },
     tanks: { type: 'number', min: 0, max: 6, step: 1, value: 2, label: 'Panzer' },
-    snow: { type: 'number', min: 0, max: 4000, step: 100, value: 1800, label: 'Schneeflocken' },
+    snow: { type: 'number', min: 0, max: 6000, step: 100, value: 2600, label: 'Schneeflocken' },
+    details: { type: 'boolean', value: true, label: 'Straßendetails (Laternen, Draht, Krater)' },
     speed: { type: 'number', min: 0, max: 4, step: .1, value: 1.3, label: 'Vorrücktempo' },
     skyColor: { type: 'color', value: '#0c1118', label: 'Himmel' },
     snowColor: { type: 'color', value: '#a9b6c6', label: 'Schnee' },
@@ -63,6 +64,16 @@ export default {
     if (flakes) scene.add(flakes);
     const booms = [];
     for (let i = 0; i < 4; i++) { const b = H.explosion({ size: 1.4, color: P.orange, smoke: '#555' }); b.position.set(-10 + r() * 22, .5, -4 + r() * 8); scene.add(b); booms.push({ b, t0: 1 + r() * 7 }); }
+    if (p.details) {
+      for (let i = 0; i < 5; i++) { const l = H.streetLamp(4.2, { lit: i === 2 }); l.position.set(-26 + i * 12, 0, 5.5); l.rotation.z = (r() - .5) * .25; scene.add(l); }
+      const fz = H.fence(16, { posts: 8 }); fz.position.set(10, 0, -5.8); scene.add(fz);
+      const sb = H.sandbags(r, 9); sb.position.set(-6, 0, 3.5); sb.rotation.y = .4; scene.add(sb);
+      for (let i = 0; i < 5; i++) { const b = H.barrel(i % 2 ? '#4a4e57' : '#5a3a30'); b.position.set(-20 + r() * 40, 0, -5 + r() * 10); b.rotation.z = r() < .3 ? Math.PI / 2 : 0; scene.add(b); }
+      for (let i = 0; i < 4; i++) { const c = H.crater(1.2 + r() * 1.5, '#5e6a78'); c.position.set(-22 + r() * 44, 0, -4 + r() * 8); scene.add(c); }
+      const wreck = H.truck('#3b3f46'); wreck.position.set(-14, 0, -3.5); wreck.rotation.set(0, 2.4, .12); scene.add(wreck);
+      for (let i = 0; i < 3; i++) { const c = H.crate(.7 + r() * .4, '#5a4a3a'); c.position.set(-2 + r() * 10, 0, 3 + r() * 2); c.rotation.y = r() * 3; scene.add(c); }
+    }
+
     return {
       update(t, p) {
         for (const g of germans) { g.f.position.set(g.x0 - t * p.speed * .8, 0, g.z); g.f.userData.walk(t + g.ph, .9); }

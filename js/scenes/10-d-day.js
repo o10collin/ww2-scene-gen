@@ -8,7 +8,8 @@ export default {
   caption: { title: 'Landung in der Normandie', sub: '6. Juni 1944' },
   params: {
     crafts: { type: 'number', min: 1, max: 8, step: 1, value: 4, label: 'Landungsboote' },
-    soldiersPer: { type: 'number', min: 1, max: 6, step: 1, value: 4, label: 'Soldaten je Boot' },
+    soldiersPer: { type: 'number', min: 1, max: 8, step: 1, value: 5, label: 'Soldaten je Boot' },
+    ships: { type: 'number', min: 0, max: 6, step: 1, value: 3, label: 'Schiffe vor der Küste' },
     obstacles: { type: 'number', min: 0, max: 30, step: 1, value: 12, label: 'Strandhindernisse' },
     arrive: { type: 'number', min: 1, max: 8, step: .1, value: 4, label: 'Ankunft nach (s)' },
     explosions: { type: 'number', min: 0, max: 12, step: 1, value: 5, label: 'Einschläge' },
@@ -58,6 +59,17 @@ export default {
       const m = H.faceZ(H.aircraft('#5c6a7a', { span: 4 })); m.rotation.y = Math.PI / 2; scene.add(m);
       planes.push({ m, y: 14 + r() * 6, z: -20 + r() * 30, lag: r() * 20 });
     }
+    for (let i = 0; i < p.ships; i++) { const sh = H.ship('#3f4752', { length: 10 + r() * 4, guns: 2 }); sh.position.set(-44 - r() * 10, .2, -30 + i * (60 / Math.max(1, p.ships)) + r() * 6); sh.rotation.y = .2 + (r() - .5) * .3; scene.add(sh); }
+    for (let i = 0; i < 2; i++) {
+      const bunker = new THREE.Group();
+      const body = H.box(6, 2.6, 5, '#3a3f44'); body.position.y = 1.3; const slit = H.box(4, .35, .2, P.black); slit.position.set(0, 1.7, -2.55);
+      const top = H.box(6.6, .5, 5.6, '#30353a'); top.position.y = 2.75; bunker.add(body, slit, top);
+      bunker.position.set(36 + i * 4, 12.5 + i * 2, -34 + i * 44); scene.add(bunker);
+      const mg = new THREE.Mesh(new THREE.SphereGeometry(.18, 6, 5), H.glowMat('#ffd27a', 2)); mg.position.set(36 + i * 4, 14.2 + i * 2, -36.6 + i * 44); scene.add(mg); bunker.userData.mg = mg;
+    }
+    for (let i = 0; i < 6; i++) { const c = H.crater(1 + r() * 1.4, '#6d7682'); c.position.set(13 + r() * 12, 0, -28 + r() * 56); scene.add(c); }
+    const bags = H.sandbags(r, 12); bags.position.set(30, 0, 8); bags.rotation.y = 1.2; scene.add(bags);
+
     return {
       update(t, p) {
         water.userData.at(t);

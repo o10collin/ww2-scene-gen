@@ -82,6 +82,23 @@ roten Flächen für gegnerisches Gebiet, gesperrten Ländernamen und leuchtenden
 „Global → Bild / Look / Text“ einstellbar, der frühere helle Comic-Look ist über Shading „toon“,
 Abdunkeln 0 und Bloom 0 wieder erreichbar.
 
+## Figuren
+
+Die Figuren sind animierte GLB-Modelle aus dem CC0-Paket „Ultimate Animated Characters“ von Quaternius
+(`assets/models/quaternius/`, Lizenz siehe `assets/models/LICENSE.md`): Soldaten, Arbeiter, Anzugträger,
+Zivilisten, Kimono-Figuren, jeweils mit Idle, Walk, Run, SitDown, PickUp, Victory, Death und weiteren Clips.
+Die Originale sind cartoonhaft proportioniert; „Global → Bild → Figurproportionen“ streckt sie standardmäßig
+auf realistische Silhouetten (Kopf kleiner, Beine länger). Mit „Figuren: Kapselfiguren“ gibt es die einfachen
+Platzhalter ohne Modelle. Beim Start werden rund 27 MB Modelle geladen, danach läuft alles lokal.
+
+In Szenen werden Figuren über `H.figure({ model: 'soldier' | 'civil' | 'worker' | 'suit' | 'kimono', pose: 'SitDown', glow: H.ROLE.west })`
+erzeugt; `userData.walk(t)` lässt sie gehen oder laufen, `userData.pose(name, t)` spielt einen anderen Clip.
+
+## Texte abschalten
+
+„Global → Text → ALLE Texte aus“ entfernt Bauchbinde, Untertitel und alle 3D-Beschriftungen (Karten, Globus)
+aus dem Bild, damit du Text später im Schnitt selbst setzen kannst. Die Einstellung gilt auch für den Export.
+
 ## Eigene Szenen
 
 Jede Szene ist eine Datei in `js/scenes/` und wird in `js/scenes/index.js` registriert.

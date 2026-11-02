@@ -29,8 +29,8 @@ export default {
     }
     const stage = H.box(22, 1.4, 6, '#33363e'); stage.position.set(0, .7, -9); scene.add(stage);
     const podium = H.box(1.6, 1.3, 1, '#4a4038'); podium.position.set(0, 2.05, -8); scene.add(podium);
-    const speaker = H.figure({ color: '#1c1d22', head: P.skin, glow: p.speakerGlow ? H.ROLE.axis : null }); speaker.position.set(0, 1.4, -8.8); speaker.rotation.y = Math.PI / 2; scene.add(speaker);
-    const [, , , , armL, armR] = speaker.children;
+    const speaker = H.figure({ color: '#1c1d22', head: P.skin, glow: p.speakerGlow ? H.ROLE.axis : null, model: 'suit', pose: 'Punch', loopPose: true }); speaker.position.set(0, 1.4, -8.8); speaker.rotation.y = Math.PI / 2; scene.add(speaker);
+    const armL = speaker.userData.armL, armR = speaker.userData.armR;
     const mics = H.cyl(.03, .03, .6, P.black, 6); mics.position.set(0, 3.0, -7.6); scene.add(mics);
     for (const x of [-7, 7]) {
       const sp = new THREE.SpotLight('#fff2d6', p.spotIntensity, 40, .35, .5, 1.2);
@@ -42,11 +42,16 @@ export default {
     }
     const crowd = [];
     for (let i = 0; i < p.rows; i++) for (let j = 0; j < p.cols; j++) {
-      const f = H.figure({ color: p.crowdColor, glow: p.crowdGlow ? H.ROLE.civil : null, strength: 1.0 });
+      const f = H.figure({ color: p.crowdColor, glow: p.crowdGlow ? H.ROLE.civil : null, strength: 1.0, model: 'civil', seed: i * 31 + j + 1 });
       f.position.set((j - (p.cols - 1) / 2) * 1.4 + (r() - .5) * .5, 0, 2 - i * 1.7 + (r() - .5) * .5);
       f.rotation.y = Math.PI / 2 + (r() - .5) * .3; scene.add(f);
-      crowd.push({ f, arms: [f.children[4], f.children[5]], ph: r() * 6, delay: r() * .8 });
+      crowd.push({ f, arms: [f.userData.armL, f.userData.armR], ph: r() * 6, delay: r() * .8 });
     }
+    for (let i = 0; i < 8; i++) for (const x of [-22, 22]) { const col = H.box(1.2, 22, 1.2, '#1a1c22'); col.position.set(x, 11, 6 - i * 4); scene.add(col); }
+    const carpet = H.box(4, .05, 26, '#4a1f1b'); carpet.position.set(0, .03, 2); carpet.receiveShadow = true; scene.add(carpet);
+    for (const x of [-.5, .5]) { const st = H.cyl(.02, .02, 1.1, P.black, 6); st.position.set(x, 2.95, -7.5); scene.add(st); const mic = H.cyl(.05, .04, .18, P.black, 8); mic.position.set(x, 3.5, -7.5); scene.add(mic); }
+    for (const x of [-10, 10]) { const tripod = H.cyl(.08, .12, 3, '#2a2d35', 6); tripod.position.set(x, 1.5, 6); scene.add(tripod); const lamp = H.cyl(.5, .35, .6, '#2a2d35', 10); lamp.rotation.z = x > 0 ? .8 : -.8; lamp.position.set(x, 3.2, 6); scene.add(lamp); }
+
     return {
       update(t, p) {
         const g = Math.sin(t * 5) * .3;
@@ -54,6 +59,7 @@ export default {
         speaker.position.y = 1.4 + Math.abs(Math.sin(t * 5)) * .05;
         for (const c of crowd) {
           const up = H.easeOut(H.span(t, p.tRaise + c.delay, p.tRaise + c.delay + .6));
+          if (up > 0) c.f.userData.pose('Victory', t - (p.tRaise + c.delay));
           c.f.position.y = Math.sin(t * 2 + c.ph) * .03 * (1 + up * 3);
           c.arms[0].rotation.z = -up * (2.6 + Math.sin(t * 6 + c.ph) * .15);
           c.arms[1].rotation.z = up * .2;
