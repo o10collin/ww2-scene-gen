@@ -84,15 +84,17 @@ Abdunkeln 0 und Bloom 0 wieder erreichbar.
 
 ## Figuren
 
-Die Figuren sind animierte GLB-Modelle aus dem CC0-Paket „Ultimate Animated Characters“ von Quaternius
-(`assets/models/quaternius/`, Lizenz siehe `assets/models/LICENSE.md`): Soldaten, Arbeiter, Anzugträger,
-Zivilisten, Kimono-Figuren, jeweils mit Idle, Walk, Run, SitDown, PickUp, Victory, Death und weiteren Clips.
-Die Originale sind cartoonhaft proportioniert; „Global → Bild → Figurproportionen“ streckt sie standardmäßig
-auf realistische Silhouetten (Kopf kleiner, Beine länger). Mit „Figuren: Kapselfiguren“ gibt es die einfachen
-Platzhalter ohne Modelle. Beim Start werden rund 27 MB Modelle geladen, danach läuft alles lokal.
+Die Figuren sind realistisch proportionierte, geriggte Mixamo-Charaktere (`assets/models/mixamo/`: Remy, Megan,
+Leonard, Brian, Joe, Kate, Louise, James, Suzie und der Soldat „Vanguard“), ohne Texturen, da sie nur als leuchtende
+Silhouetten gerendert werden. Dazu kommt eine Mixamo-Animationsbibliothek (`assets/models/anim/`, rund 40 Clips:
+Idle, Walking, Running, Gewehr-Idle/Walk/Run, Sitzen, Schreiben am Tisch, Jubeln, Reden, Heben, Tragen, Schaufeln,
+Sterben, Knien, Beten, Weinen, Salutieren). Die Clips werden beim Laden auf das Skelett jedes Modells gemappt
+(Knochenpräfix, Hüfthöhe und Drehung des Hüft-Elternteils werden umgerechnet). Lizenzhinweise in
+`assets/models/LICENSE.md`. „Global → Bild → Figuren: Kapselfiguren“ schaltet auf die einfachen Platzhalter um.
 
-In Szenen werden Figuren über `H.figure({ model: 'soldier' | 'civil' | 'worker' | 'suit' | 'kimono', pose: 'SitDown', glow: H.ROLE.west })`
-erzeugt; `userData.walk(t)` lässt sie gehen oder laufen, `userData.pose(name, t)` spielt einen anderen Clip.
+In Szenen: `H.figure({ model: 'soldier' | 'civil' | 'suit' | 'worker', pose: 'Male_Writing_While_Seated', glow: H.ROLE.west })`;
+`userData.walk(t, amp)` lässt gehen (amp > 1.1 rennen), `userData.pose(name, t)` spielt einen beliebigen Clip aus `H.CLIP_NAMES`.
+Eigene Clips: Mixamo-Animation als GLB (nur Skelett) nach `assets/models/anim/` legen und in `CLIP_NAMES` eintragen.
 
 ## Texte abschalten
 

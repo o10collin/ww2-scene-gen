@@ -122,44 +122,109 @@ export function label(text, { color = '#f4f1ea', size = 1, font = "500 60px 'Cor
 
 // ---------- Figuren & Fahrzeuge (alle schauen in +X) ----------
 // ---------- Figurenmodelle (GLB, animiert) ----------
-// Quaternius „Ultimate Animated Characters“ (CC0): ca. 3,25 Einheiten hoch, Füße bei y=0, Blick in +Z
-const Q = 'assets/models/quaternius/';
-const QDEF = { height: 1.75, nativeHeight: 1.9, idle: 'Idle', walk: 'Walk', run: 'Run', forward: 0 };
-export const MODEL_FILES = {};
+// ---------- Figurenmodelle: Mixamo-Charaktere (realistische Proportionen) + Mixamo-Animationsbibliothek ----------
+// Modelle: Skelett „mixamorig:*“, Armature-Skalierung 0,01. Clips: eigene GLBs ohne Mesh, Knochen ohne Präfix,
+// andere Hüft-Einheiten -> beim Laden werden Spurnamen umbenannt und die Hüftposition je Modell skaliert.
+const SUF = (typeof window !== 'undefined' && window.MODEL_SUFFIX) || '';
+const MX = 'assets/models/mixamo/', AN = 'assets/models/anim/';
 export const MODEL_GROUPS = {
-  soldier: ['Soldier_Male', 'Soldier_Female'],
-  civil: ['Casual_Male', 'Casual_Female', 'Casual2_Male', 'Casual2_Female', 'Casual3_Male', 'Casual3_Female', 'OldClassy_Male', 'OldClassy_Female'],
-  worker: ['Worker_Male', 'Worker_Female'],
-  suit: ['Suit_Male', 'Suit_Female'],
-  kimono: ['Kimono_Male', 'Kimono_Female']
+  soldier: ['soldier'],
+  civil: ['remy', 'joe', 'megan', 'kate', 'suzie', 'louise', 'brian', 'james', 'leonard'],
+  suit: ['leonard', 'james', 'brian'],
+  worker: ['joe', 'remy', 'brian', 'kate'],
+  kimono: ['megan', 'kate', 'suzie', 'joe']
 };
 MODEL_GROUPS.human = MODEL_GROUPS.civil;
-// MODEL_SUFFIX: Hosting-Umgebungen, die keine .glb ausliefern, bekommen die Dateien unter anderem Namen (z. B. '.wasm' im Artifact)
-const SUF = (typeof window !== 'undefined' && window.MODEL_SUFFIX) || '';
-for (const names of Object.values(MODEL_GROUPS)) for (const n of names) MODEL_FILES[n] = { url: Q + n + '.glb' + SUF, ...QDEF };
-const LOOP_CLIPS = new Set(['Idle', 'Walk', 'Run', 'Walk_Carry', 'Run_Carry']);
+export const MODEL_FILES = {};
+for (const names of Object.values(MODEL_GROUPS)) for (const n of names) MODEL_FILES[n] = { url: MX + n + '.glb' + SUF, height: n === 'soldier' ? 1.78 : 1.72, forward: 0 };
+export const CLIP_NAMES = ['Standing_Idle_Loop', 'Standing_Idle', 'Walking', 'Running_Fast', 'Jogging', 'Looking_Around', 'Thinking_While_Standing', 'Waving_With_Both_Hands',
+  'Rifle_Idle', 'Rifle_Walk_Forward', 'Rifle_Run_Forward', 'Rifle_Walking_Crouched', 'Rifle_Aiming_And_Kneeling', 'Formal_Military_Salute', 'Pointing_Onward_Charge', 'Crouch_Idle',
+  'Male_Writing_While_Seated', 'Male_Talking_While_Seated', 'Sitting_And_Talking_To_Another_Person', 'Clap_While_Seated', 'Sitting_Cross_Legged', 'Sitting_On_The_Floor', 'Banging_Fist_On_Table',
+  'Rallying_The_Crowd_To_Make_Them_Cheer', 'Super_Excited', 'High_Enthusiasm_Fist_Pump', 'Pumping_A_Fist', 'Yelling_While_Standing_Leaning_Forward', 'Stepping_Forward_And_Yelling_Out', 'Standing_Arguing_With_Another_Person',
+  'Lifting_A_Heavy_Object_With_Both_Hands', 'Carrying_A_Box', 'Pushing_Heavy_Object', 'Digging_Hole_With_Shovel',
+  'Dying_Falling_Forward', 'Laying_On_The_Ground_Dying', 'Falling_Back_Death', 'Kneeling_Idle', 'Kneeling_In_Prayer', 'Injured_Walking', 'Injured_Standard_Idle', 'Standing_Praying_While_Swaying', 'Crying_And_Rubbing_Eyes'];
+const ONESHOT = n => /Dying|Death|Salute|Pointing_Onward|Stepping_Forward/.test(n);
+const ROLE_CLIPS = {
+  soldier: { idle: 'Rifle_Idle', walk: 'Rifle_Walk_Forward', run: 'Rifle_Run_Forward' },
+  civil: { idle: 'Standing_Idle_Loop', walk: 'Walking', run: 'Running_Fast' }
+};
 export const MODELS = {};
+export const CLIPS = {};
+let CLIP_HIP_REST = 1;
 let figureMode = 'glb';           // 'glb' | 'capsule'
-let proportions = 'real';         // 'real' | 'cartoon' – Quaternius-Figuren sind Chibi-artig, 'real' streckt sie
-export function setProportions(m) { proportions = m; }
 let labelsOn = true;
-const FIGURES = new Set();        // alle animierten Figuren der aktuellen Szene
+const FIGURES = new Set();
 export function setFigureMode(m) { figureMode = m; }
+export function setProportions() { /* nur noch zur Kompatibilität */ }
 export function setLabels(on) { labelsOn = on; }
+
 export async function preloadModels(onProgress) {
   const loader = new GLTFLoader();
+  const jobs = [];
   for (const [key, def] of Object.entries(MODEL_FILES)) {
     if (MODELS[key]) continue;
-    try {
-      const gltf = await loader.loadAsync(def.url);
-      // Skalierungs-Tracks entfernen, damit Proportionsänderungen an den Knochen nicht überschrieben werden
-      for (const c of gltf.animations) c.tracks = c.tracks.filter(tr => !tr.name.endsWith('.scale'));
-      // Mixamo-Modelle aus den three.js-Beispielen sind ca. 1,8 Einheiten hoch (Meter)
-      MODELS[key] = { scene: gltf.scene, clips: gltf.animations, scale: def.height / def.nativeHeight, def, minY: 0 };
+    jobs.push(loader.loadAsync(def.url).then(gltf => {
+      const root = gltf.scene;
+      root.updateMatrixWorld(true);
+      const box3 = new THREE.Box3().setFromObject(root);
+      const h = Math.max(.01, box3.max.y - box3.min.y);
+      let hips = null;
+      root.traverse(o => { if (o.isBone && /Hips$/.test(o.name) && !hips) hips = o; });
+      // Knochenpräfix (mixamorig, mixamorig4, …) und Drehung des Hüft-Elternteils im Ruhezustand:
+      // Clips liefern die Hüfte in y-up-Konvention, die wir in den Elternraum des Modells umrechnen
+      const prefix = hips ? hips.name.replace(/Hips$/, '') : 'mixamorig';
+      const preInv = new THREE.Quaternion();
+      if (hips && hips.parent) { hips.parent.getWorldQuaternion(preInv); preInv.invert(); }
+      const hipLen = hips ? hips.position.length() : 100;
+      const bones = new Set(); root.traverse(o => { if (o.isBone) bones.add(o.name); });
+      MODELS[key] = { bones, scene: root, clips: gltf.animations, scale: def.height / h, def, minY: box3.min.y, hipLen, prefix, preInv, clipCache: {} };
       onProgress?.(key);
-    } catch (e) { console.warn('Modell nicht ladbar', key, e); }
+    }).catch(e => console.warn('Modell nicht ladbar', key, e)));
   }
+  for (const name of CLIP_NAMES) {
+    if (CLIPS[name]) continue;
+    jobs.push(loader.loadAsync(AN + name + '.glb' + SUF).then(gltf => {
+      const clip = gltf.animations[0]; clip.name = name;
+      let hipsNode = null; gltf.scene.traverse(o => { if (/Hips$/.test(o.name) && !hipsNode) hipsNode = o; });
+      const hipRest = hipsNode ? hipsNode.position.length() || 1 : 1;   // Ruhehöhe der Hüfte im Clip-Rig
+      clip.tracks = clip.tracks.filter(tr => {
+        const [bone, prop] = tr.name.split('.');
+        if (prop === 'scale') return false;
+        if (prop === 'position' && !bone.endsWith('Hips')) return false;
+        tr.name = bone.replace(/^mixamorig\d*:?/, '') + '.' + prop;   // Basisname ohne Präfix, Präfix kommt je Modell dazu
+        return true;
+      });
+      clip.userData = { hipRest };
+      CLIPS[name] = clip;
+    }).catch(e => console.warn('Clip nicht ladbar', name, e)));
+  }
+  await Promise.all(jobs);
+  // Kanonische Hüfthöhe des Clip-Rigs: erster Frame der stehenden Idle-Animation
+  const ref = CLIPS['Standing_Idle_Loop'] || Object.values(CLIPS)[0];
+  const tr = ref?.tracks.find(t => t.name === 'Hips.position');
+  CLIP_HIP_REST = tr ? Math.hypot(tr.values[0], tr.values[1], tr.values[2]) || 1 : 1;
   return MODELS;
+}
+// Clip an Modell anpassen (Hüftposition skalieren), gecacht
+function clipFor(M, name) {
+  if (M.clipCache[name]) return M.clipCache[name];
+  const src = CLIPS[name]; if (!src) return null;
+  const clip = src.clone();
+  clip.tracks = clip.tracks.filter(tr => M.bones.has(M.prefix + tr.name.split('.')[0]));
+  const k = M.hipLen / CLIP_HIP_REST;
+  const q = new THREE.Quaternion(), v = new THREE.Vector3();
+  for (const tr of clip.tracks) {
+    const [bone, prop] = tr.name.split('.');
+    tr.name = M.prefix + bone + '.' + prop;
+    if (bone !== 'Hips') continue;
+    const a = tr.values;
+    if (prop === 'position') {
+      for (let i = 0; i < a.length; i += 3) { v.set(a[i] * k, a[i + 1] * k, a[i + 2] * k).applyQuaternion(M.preInv); a[i] = v.x; a[i + 1] = v.y; a[i + 2] = v.z; }
+    } else if (prop === 'quaternion') {
+      for (let i = 0; i < a.length; i += 4) { q.set(a[i], a[i + 1], a[i + 2], a[i + 3]).premultiply(M.preInv); a[i] = q.x; a[i + 1] = q.y; a[i + 2] = q.z; a[i + 3] = q.w; }
+    }
+  }
+  M.clipCache[name] = clip; return clip;
 }
 let frameId = 0;
 export function animateFigures(t) {
@@ -170,9 +235,8 @@ export function animateFigures(t) {
     if (u.drivenFrame !== frameId) u.play(u.idleName, t * u.speed + u.offset, 1);
   }
 }
-export function markDriven(f) { f.userData.drivenFrame = frameId + 1; }
 
-export function figure({ color = P.grey, head = P.skin, helmet = null, scale = 1, glow = null, strength = ROLE.strength, model = 'auto', pose = null, seed = 0, loopPose = false } = {}) {
+export function figure({ color = P.grey, head = P.skin, helmet = null, scale = 1, glow = null, strength = ROLE.strength, model = 'auto', pose = null, seed = 0, loopPose = false, clips = null } = {}) {
   const g = new THREE.Group();
   const gm = glow ? glowMat(glow, strength) : null;
   const groupKey = model === 'auto' ? (helmet ? 'soldier' : 'civil') : model;
@@ -184,41 +248,35 @@ export function figure({ color = P.grey, head = P.skin, helmet = null, scale = 1
     const M = MODELS[key];
     const inst = SkeletonUtils.clone(M.scene);
     inst.traverse(o => {
-      if (o.isMesh) {
-        o.material = gm || mat(color);
-        o.castShadow = true; o.receiveShadow = false; o.frustumCulled = false;
-      }
+      if (o.isMesh) { o.material = gm || mat(color); o.castShadow = true; o.receiveShadow = false; o.frustumCulled = false; }
     });
-    // Proportionen: Kopf kleiner, Hals/Rumpf/Beine länger -> realistischere Silhouette statt Chibi
-    let lift = 0;
-    if (proportions === 'real') {
-      const S = { Head: [.58, .58, .58], Neck: [1, 1.6, 1], Torso: [1, 1.15, 1], Abdomen: [1, 1.1, 1], UpperLegL: [1, 1.3, 1], UpperLegR: [1, 1.3, 1], UpperArmL: [1, 1.2, 1], UpperArmR: [1, 1.2, 1] };
-      inst.traverse(o => { if (o.isBone && S[o.name]) o.scale.set(...S[o.name]); });
-      lift = .36;
-    }
     const wrap = new THREE.Group();
     wrap.add(inst);
-    inst.scale.setScalar(M.scale * (proportions === 'real' ? .9 : 1)); inst.position.y = (-M.minY + lift) * M.scale;
-    wrap.rotation.y = Math.PI / 2 - M.def.forward;   // Blickrichtung des Modells (Winkel um Y, +Z = 0) auf +X drehen
+    inst.scale.setScalar(M.scale); inst.position.y = -M.minY * M.scale;
+    wrap.rotation.y = Math.PI / 2 - M.def.forward;   // Modell schaut in +X wie die Kapselfigur
     g.add(wrap);
     const mixer = new THREE.AnimationMixer(inst);
     const actions = {};
-    for (const c of M.clips) {
-      const a = mixer.clipAction(c); a.play(); a.enabled = false; a.setEffectiveWeight(0); actions[c.name] = a;
-      if (!LOOP_CLIPS.has(c.name) && !(loopPose && c.name === pose)) { a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; }
-    }
+    const addClip = (c, nm) => {
+      const a = mixer.clipAction(c); a.play(); a.enabled = false; a.setEffectiveWeight(0); actions[nm] = a;
+      if (ONESHOT(nm) && !(loopPose && nm === pose)) { a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; }
+    };
+    for (const c of M.clips) addClip(c, c.name);
+    for (const nm of CLIP_NAMES) { const c = clipFor(M, nm); if (c) addClip(c, nm); }
+    const rc = clips || ROLE_CLIPS[groupKey === 'soldier' ? 'soldier' : 'civil'];
     g.userData.mixer = mixer; g.userData.actions = actions;
-    g.userData.idleName = pose && actions[pose] ? pose : M.def.idle;
+    g.userData.idleName = pose && actions[pose] ? pose : (actions[rc.idle] ? rc.idle : 'Standing_Idle_Loop');
     g.userData.speed = 1; g.userData.offset = (n % 97) * .37;
     g.userData.play = (name, time, weight = 1) => {
-      for (const [n, a] of Object.entries(actions)) { const on = n === name; a.enabled = on; a.setEffectiveWeight(on ? weight : 0); }
+      if (!actions[name]) name = g.userData.idleName;
+      for (const [nm, a] of Object.entries(actions)) { const on = nm === name; a.enabled = on; a.setEffectiveWeight(on ? weight : 0); }
       mixer.setTime(time);
     };
     g.userData.walk = (t, amp = 1) => {
       g.userData.drivenFrame = frameId + 1;
-      g.userData.play(amp > 1.1 ? M.def.run : M.def.walk, t * (0.9 + amp * .3) + g.userData.offset, 1);
+      g.userData.play(amp > 1.1 ? rc.run : rc.walk, t * (0.9 + amp * .3) + g.userData.offset, 1);
     };
-    g.userData.pose = (name, time) => { g.userData.drivenFrame = frameId + 1; g.userData.play(actions[name] ? name : M.def.idle, time, 1); };
+    g.userData.pose = (name, time) => { g.userData.drivenFrame = frameId + 1; g.userData.play(name, time, 1); };
     FIGURES.add(g);
   } else {
     const bodyMat = gm || color;

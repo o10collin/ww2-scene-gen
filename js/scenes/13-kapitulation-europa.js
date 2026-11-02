@@ -31,11 +31,12 @@ export default {
     // Delegationen hinter dem Tisch
     const roles = [H.ROLE.west, H.ROLE.west, H.ROLE.soviet, H.ROLE.west, H.ROLE.soviet];
     for (let i = 0; i < 5; i++) {
-      const f = H.figure({ color: P.grey, glow: roles[i], model: i % 2 ? 'suit' : 'soldier', pose: 'SitDown', seed: i + 11 });
-      f.position.set(-2.6 + i * 1.3, 0, -1.4); f.rotation.y = Math.PI / 2; scene.add(f);
+      const f = H.figure({ color: P.grey, glow: roles[i], model: i % 2 ? 'suit' : 'soldier', pose: i === 2 ? 'Sitting_And_Talking_To_Another_Person' : 'Male_Talking_While_Seated', seed: i + 11 });
+      f.position.set(-2.6 + i * 1.3, 0, -1.7); f.rotation.y = -Math.PI / 2; scene.add(f);
     }
     // Unterzeichnender vor dem Tisch
-    const signer = H.figure({ color: '#555a63', glow: H.ROLE.axis, model: 'soldier', pose: 'PickUp', seed: 7 }); signer.position.set(0, 0, 1.3); signer.rotation.y = -Math.PI / 2; scene.add(signer);
+    const signer = H.figure({ color: '#555a63', glow: H.ROLE.axis, model: 'soldier', pose: 'Male_Writing_While_Seated', seed: 7 }); signer.position.set(0, 0, 1.2); signer.rotation.y = Math.PI / 2; scene.add(signer);
+    const sChair = new THREE.Group(); const sSeat = H.box(.55, .08, .55, '#3a2e26'); sSeat.position.y = .5; const sBack = H.box(.55, .7, .06, '#3a2e26'); sBack.position.set(0, .9, .25); sChair.add(sSeat, sBack); sChair.position.set(0, 0, 1.45); scene.add(sChair);
     const armL = signer.userData.armL, armR = signer.userData.armR;
     if (p.flags) {
       const sets = [[P.blue, P.white, P.red], [P.red, P.white, P.blue], [P.red, P.red], [P.blue, P.white, P.red]];

@@ -44,8 +44,8 @@ export default {
     const civ = ['#6b5b4a', '#4e5f7a', '#7a6e5a', '#5a6a5c', '#3d3a3f', '#8a7a6a'];
     const people = [];
     for (let i = 0; i < p.civilians; i++) {
-      const f = H.figure({ color: civ[i % civ.length], scale: r() < .25 ? .7 : 1, glow: H.ROLE.civil, strength: 1.3, model: 'civil', seed: i + 5, pose: i < 2 ? 'Death' : (i === 2 ? 'Defeat' : null) });
-      const walking = i > 2 && r() < .6;
+      const f = H.figure({ color: civ[i % civ.length], scale: r() < .25 ? .7 : 1, glow: H.ROLE.civil, strength: 1.3, model: 'civil', seed: i + 5, pose: i < 2 ? 'Laying_On_The_Ground_Dying' : (i === 2 ? 'Kneeling_In_Prayer' : (i === 3 ? 'Crying_And_Rubbing_Eyes' : null)) });
+      const walking = i > 3 && r() < .7;
       f.position.set(-20 + r() * 36, 0, -4 + r() * 8); f.rotation.y = walking ? Math.PI : r() * 6.28;
       scene.add(f); people.push({ f, walking, ph: r() * 6, x0: f.position.x });
     }

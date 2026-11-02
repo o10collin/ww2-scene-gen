@@ -17,7 +17,6 @@ const GLOBAL_SCHEMA = {
   width: { type: 'number', min: 320, max: 4096, step: 2, value: 1920, label: 'Breite (Eigene)', group: 'Bild' },
   height: { type: 'number', min: 320, max: 4096, step: 2, value: 1080, label: 'Höhe (Eigene)', group: 'Bild' },
   figures: { type: 'select', options: ['GLB-Modelle (animiert)', 'Kapselfiguren (einfach)'], value: 'GLB-Modelle (animiert)', label: 'Figuren', group: 'Bild' },
-  proportions: { type: 'select', options: ['realistisch (gestreckt)', 'cartoon (Original)'], value: 'realistisch (gestreckt)', label: 'Figurproportionen', group: 'Bild' },
   shading: { type: 'select', options: ['lambert', 'toon'], value: 'lambert', label: 'Shading', group: 'Bild' },
   darken: { type: 'number', min: 0, max: 1, step: .05, value: .55, label: 'Abdunkeln (Himmel/Licht)', group: 'Bild' },
   bloom: { type: 'number', min: 0, max: 3, step: .05, value: .55, label: 'Bloom (Leuchten)', group: 'Bild' },
@@ -49,10 +48,10 @@ const GLOBAL_SCHEMA = {
   fps: { type: 'select', options: ['24', '25', '30', '50', '60'], value: '30', label: 'Bilder/s', group: 'Export' },
   bitrate: { type: 'number', min: 2, max: 80, step: 1, value: 20, label: 'Bitrate (Mbit/s)', group: 'Export' }
 };
-const REBUILD_GLOBAL = new Set(['shading', 'shadows', 'darken', 'roleAxis', 'roleWest', 'roleSoviet', 'roleCivil', 'glowStrength', 'figures', 'textOff', 'proportions']);
+const REBUILD_GLOBAL = new Set(['shading', 'shadows', 'darken', 'roleAxis', 'roleWest', 'roleSoviet', 'roleCivil', 'glowStrength', 'figures', 'textOff']);
 const RESOLUTION_GLOBAL = new Set(['preset', 'width', 'height']);
 
-const LOOK_VERSION = '6';  // bei Änderung der Standard-Optik gespeicherte Globaleinstellungen verwerfen
+const LOOK_VERSION = '7';  // bei Änderung der Standard-Optik gespeicherte Globaleinstellungen verwerfen
 try { if (localStorage.getItem(LS + 'version') !== LOOK_VERSION) { localStorage.removeItem(LS + 'global'); localStorage.setItem(LS + 'version', LOOK_VERSION); } } catch { /* kein Speicher */ }
 const global = {};
 for (const [k, s] of Object.entries(GLOBAL_SCHEMA)) global[k] = s.value;
@@ -134,7 +133,6 @@ function loadScene(i, keepTime = false) {
   const params = active && active.def === def ? active.params : paramsFor(def);
   H.setShading(global.shading);
   H.setFigureMode(global.figures.startsWith('GLB') ? 'glb' : 'capsule');
-  H.setProportions(global.proportions.startsWith('real') ? 'real' : 'cartoon');
   H.setLabels(!global.textOff);
   H.setRoles({ axis: global.roleAxis, west: global.roleWest, soviet: global.roleSoviet, civil: global.roleCivil, strength: global.glowStrength });
   const scene = new THREE.Scene();
@@ -264,7 +262,7 @@ function composite(t) {
   if (fade > 0) { ctx.globalAlpha = fade; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, Hh); ctx.globalAlpha = 1; }
 }
 
-window.__studio = { get active() { return active; }, state, renderer, global, loadScene, renderAt };
+window.__studio = { get active() { return active; }, state, renderer, global, loadScene, renderAt, H };
 function renderAt(t) {
   active.api.update?.(t, active.params);
   H.animateFigures(t);

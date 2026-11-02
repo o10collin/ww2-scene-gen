@@ -51,7 +51,7 @@ export default {
     const civ = ['#6b5b4a', '#4e5f7a', '#7a6e5a', '#5a6a5c', '#8a7a6a'];
     for (let i = 0; i < p.workers; i++) {
       const youth = r() < p.youthShare;
-      const f = H.figure({ color: civ[i % civ.length], scale: youth ? .72 : 1, glow: H.ROLE.civil, strength: 1.3, model: youth ? 'civil' : 'worker', pose: 'PickUp', loopPose: true, seed: i + 3 });
+      const f = H.figure({ color: civ[i % civ.length], scale: youth ? .72 : 1, glow: H.ROLE.civil, strength: 1.3, model: youth ? 'civil' : 'worker', pose: ['Lifting_A_Heavy_Object_With_Both_Hands', 'Pushing_Heavy_Object', 'Carrying_A_Box', 'Digging_Hole_With_Shovel'][i % 4], loopPose: true, seed: i + 3 });
       const side = i % 2 ? 1 : -1;
       f.position.set(-12 + i * (24 / p.workers) + r(), 0, side * 1.7);
       f.rotation.y = side > 0 ? Math.PI / 2 : -Math.PI / 2;

@@ -29,7 +29,7 @@ export default {
     }
     const stage = H.box(22, 1.4, 6, '#33363e'); stage.position.set(0, .7, -9); scene.add(stage);
     const podium = H.box(1.6, 1.3, 1, '#4a4038'); podium.position.set(0, 2.05, -8); scene.add(podium);
-    const speaker = H.figure({ color: '#1c1d22', head: P.skin, glow: p.speakerGlow ? H.ROLE.axis : null, model: 'suit', pose: 'Punch', loopPose: true }); speaker.position.set(0, 1.4, -8.8); speaker.rotation.y = Math.PI / 2; scene.add(speaker);
+    const speaker = H.figure({ color: '#1c1d22', head: P.skin, glow: p.speakerGlow ? H.ROLE.axis : null, model: 'suit', pose: 'Rallying_The_Crowd_To_Make_Them_Cheer', loopPose: true }); speaker.position.set(0, 1.4, -8.8); speaker.rotation.y = -Math.PI / 2; scene.add(speaker);
     const armL = speaker.userData.armL, armR = speaker.userData.armR;
     const mics = H.cyl(.03, .03, .6, P.black, 6); mics.position.set(0, 3.0, -7.6); scene.add(mics);
     for (const x of [-7, 7]) {
@@ -59,7 +59,7 @@ export default {
         speaker.position.y = 1.4 + Math.abs(Math.sin(t * 5)) * .05;
         for (const c of crowd) {
           const up = H.easeOut(H.span(t, p.tRaise + c.delay, p.tRaise + c.delay + .6));
-          if (up > 0) c.f.userData.pose('Victory', t - (p.tRaise + c.delay));
+          if (up > 0) c.f.userData.pose(c.ph > 3 ? 'High_Enthusiasm_Fist_Pump' : 'Super_Excited', t - (p.tRaise + c.delay) + c.ph);
           c.f.position.y = Math.sin(t * 2 + c.ph) * .03 * (1 + up * 3);
           c.arms[0].rotation.z = -up * (2.6 + Math.sin(t * 6 + c.ph) * .15);
           c.arms[1].rotation.z = up * .2;

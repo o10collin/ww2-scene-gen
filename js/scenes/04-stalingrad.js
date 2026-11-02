@@ -53,7 +53,7 @@ export default {
     const soviets = [];
     for (let i = 0; i < p.soviets; i++) {
       const f = H.figure({ color: p.sovietColor, helmet: '#5b3a35', glow: p.glow ? H.ROLE.soviet : null });
-      scene.add(f); soviets.push({ f, x0: 18 + r() * 12, z: -4 + r() * 8, ph: r() * 6 });
+      f.rotation.y = Math.PI; scene.add(f); soviets.push({ f, x0: 18 + r() * 12, z: -4 + r() * 8, ph: r() * 6 });
     }
     const tanks = [];
     for (let i = 0; i < p.tanks; i++) {
