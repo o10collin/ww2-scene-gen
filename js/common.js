@@ -145,6 +145,8 @@ export const CLIP_NAMES = ['Standing_Idle_Loop', 'Standing_Idle', 'Walking', 'Ru
   'Dying_Falling_Forward', 'Laying_On_The_Ground_Dying', 'Falling_Back_Death', 'Kneeling_Idle', 'Kneeling_In_Prayer', 'Injured_Walking', 'Injured_Standard_Idle', 'Standing_Praying_While_Swaying', 'Crying_And_Rubbing_Eyes'];
 const ONESHOT = n => /Dying|Death|Salute|Pointing_Onward|Stepping_Forward/.test(n);
 const BROKEN_HIPS = n => n === 'Walking';   // Hüftspur dieses Clips liegt auf Bodenhöhe
+// Meter pro Clip-Durchlauf (vor dem Entfernen der Wurzelbewegung gemessen), damit Schritte zur Strecke passen
+const LOOP_M = { Rifle_Walk_Forward: 1.94, Rifle_Run_Forward: 2.43, Rifle_Walking_Crouched: 1.21, Injured_Walking: 2.1, Walking: 1.55, Running_Fast: 2.2, Jogging: 2.5, Pushing_Heavy_Object: 1.21 };
 const ROLE_CLIPS = {
   soldier: { idle: 'Rifle_Idle', walk: 'Rifle_Walk_Forward', run: 'Rifle_Run_Forward' },
   civil: { idle: 'Standing_Idle_Loop', walk: 'Walking', run: 'Running_Fast' }
@@ -287,6 +289,14 @@ export function figure({ color = P.grey, head = P.skin, helmet = null, scale = 1
       g.userData.drivenFrame = frameId + 1;
       g.userData.play(amp > 1.1 ? rc.run : rc.walk, t * (0.9 + amp * .3) + g.userData.offset, 1);
     };
+    // Gehen nach zurückgelegter Strecke (Meter in Weltkoordinaten): Schrittfrequenz passt zur Geschwindigkeit, kein Gleiten
+    g.userData.walkDist = (dist, amp = 1) => {
+      g.userData.drivenFrame = frameId + 1;
+      const name = amp > 1.1 ? rc.run : rc.walk, a = actions[name];
+      const dur = a ? a.getClip().duration : 1, m = (LOOP_M[name] || 1.8) * scale;
+      g.userData.play(name, dist / m * dur + g.userData.offset, 1);
+    };
+    g.userData.idle = t => { g.userData.drivenFrame = frameId + 1; g.userData.play(g.userData.idleName, t + g.userData.offset, 1); };
     g.userData.pose = (name, time) => { g.userData.drivenFrame = frameId + 1; g.userData.play(name, time, 1); };
     FIGURES.add(g);
   } else {
@@ -307,6 +317,8 @@ export function figure({ color = P.grey, head = P.skin, helmet = null, scale = 1
       const s = Math.sin(t * 8) * .5 * amp;
       legL.rotation.z = s; legR.rotation.z = -s; armL.rotation.z = -s * .8; armR.rotation.z = s * .8;
     };
+    g.userData.walkDist = (dist, amp = 1) => g.userData.walk(dist / Math.max(.2, scale) * .8, amp);
+    g.userData.idle = () => { legL.rotation.z = legR.rotation.z = armL.rotation.z = armR.rotation.z = 0; };
     g.userData.armL = armL; g.userData.armR = armR;
     g.userData.pose = () => {};
   }
@@ -930,14 +942,14 @@ export function flame(r, { size = 1, tongues = 6, embers = 24, spread = 1 } = {}
     spawn: () => ({ p: [(r() - .5) * 2 * sx, size * .8, (r() - .5) * 2 * sz], v: [(r() - .5) * size * .8 + size * .4, size * (1.8 + r() * 1.6), (r() - .5) * size * .8], delay: r() * 4, life: 2.6 + r() * 1.6, s0: size * .5, s1: size * 2.8 }) }));
   add(emitter(r, embers, { map: DOT_TEX(), additive: true, loop: true, colors: ['#ffd080', '#ff7020', '#7a2000'], bright: 1.4, drag: .5, gravity: [0, size * .3, 0], grow: 1, fadeIn: .05, fadeOut: .5, renderOrder: 3,
     spawn: () => ({ p: [(r() - .5) * 2 * sx, size * .2, (r() - .5) * 2 * sz], v: [(r() - .5) * size * 1.2, size * (1.5 + r() * 2.5), (r() - .5) * size * 1.2], delay: r() * 3, life: .8 + r() * 1.4, s0: size * .06, s1: size * .02 }) }));
-  const light = new THREE.PointLight('#ff8a30', 0, size * 10, 1.6); light.position.y = size * .7; g.add(light);
+  const light = new THREE.PointLight('#ff8a30', 0, size * 8, 2); light.position.y = size * .7; g.add(light);
   g.visible = false;
   g.userData.at = (age, strength = 1) => {
     if (age < 0) { g.visible = false; light.intensity = 0; return; }
     g.visible = true;
     const on = Math.min(1, age / 1.2) * strength;
     for (const m of parts) m.userData.set(age, on);
-    light.intensity = size * 5 * on * (1 + .25 * Math.sin(age * 23) + .15 * Math.sin(age * 41));
+    light.intensity = size * 1.4 * on * (1 + .25 * Math.sin(age * 23) + .15 * Math.sin(age * 41));
   };
   return g;
 }
@@ -1099,7 +1111,7 @@ export function envGradient(top = '#1a2230', horizon = '#4a5a6c', bottom = '#050
   ENV[key] = t; return t;
 }
 // Wasserfläche: mehrere Wellenlagen, Normalen pro Bild, glänzendes Material mit Himmelsspiegelung. userData.at(t)
-export function wavePlane(w, h, seg = 48, color = P.water, { amp = .12, opts = {}, roughness = .22, env = null } = {}) {
+export function wavePlane(w, h, seg = 48, color = P.water, { amp = .12, opts = {}, roughness = .58, env = null } = {}) {
   const geo = new THREE.PlaneGeometry(w, h, Math.max(seg, 96), Math.max(seg, 96));
   const material = new THREE.MeshStandardMaterial({ color, roughness, metalness: .05, envMap: env || envGradient(), envMapIntensity: 1.2, ...opts });
   const m = new THREE.Mesh(geo, material);
@@ -1129,6 +1141,21 @@ export function bomb(length = 1.1, color = '#23262b') {
   for (let i = 0; i < 4; i++) { const f = box(.02, .36, .26, m); f.position.z = -length * .45; f.rotation.z = i * Math.PI / 2; g.add(f); }
   g.traverse(o => { if (o.isMesh) { o.castShadow = false; } });
   return g;
+}
+
+// Leuchtender Punkt-Sprite (Mündungsblitz, Glühen), additiv, HDR für Bloom
+export function glowSprite(color = '#ffd080', size = 1, opacity = 1) {
+  const m = new THREE.SpriteMaterial({ map: DOT_TEX(), color: new THREE.Color(color).multiplyScalar(2.5), transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false });
+  m.toneMapped = false;
+  const sp = new THREE.Sprite(m); sp.scale.setScalar(size); return sp;
+}
+// Leuchtspurgeschoss: heller Kopf, verblassender Schweif (entlang +Z)
+export function tracerShot(color = '#ffd27a', length = 2.6) {
+  const g = new THREE.Group();
+  const head = mesh(new THREE.BoxGeometry(.11, .11, length * .22), glowMat('#fff2c8', 3.0)); head.position.z = length * .39; head.castShadow = false;
+  const tail = mesh(new THREE.BoxGeometry(.07, .07, length * .78), glowMat(color, 1.5)); tail.position.z = -length * .11; tail.castShadow = false;
+  const tailMat = tail.material; tailMat.transparent = true; tailMat.opacity = .7;
+  g.add(head, tail); return g;
 }
 
 // Rauch- und Feuerfahne entlang eines Pfads: Partikel i startet bei path(i/n) zur Zeit (i/n)*duration. userData.at(age)
