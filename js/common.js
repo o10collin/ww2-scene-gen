@@ -146,10 +146,10 @@ export const CLIP_NAMES = ['Standing_Idle_Loop', 'Standing_Idle', 'Walking', 'Ru
 const ONESHOT = n => /Dying|Death|Salute|Pointing_Onward|Stepping_Forward/.test(n);
 const BROKEN_HIPS = n => n === 'Walking';   // Hüftspur dieses Clips liegt auf Bodenhöhe
 // Meter pro Clip-Durchlauf (vor dem Entfernen der Wurzelbewegung gemessen), damit Schritte zur Strecke passen
-const LOOP_M = { Rifle_Walk_Forward: 1.94, Rifle_Run_Forward: 2.43, Rifle_Walking_Crouched: 1.21, Injured_Walking: 2.1, Walking: 1.55, Running_Fast: 2.2, Jogging: 5.09, Pushing_Heavy_Object: 1.21 };
+const LOOP_M = { Rifle_Walk_Forward: 1.94, Rifle_Run_Forward: 2.43, Rifle_Walking_Crouched: 1.21, Injured_Walking: 2.1, Walking: 1.55, Walk_Natural: 1.62, Run_Natural: 1.63, Running_Fast: 2.2, Jogging: 5.09, Pushing_Heavy_Object: 1.21 };
 const ROLE_CLIPS = {
   soldier: { idle: 'Rifle_Idle', walk: 'Rifle_Walk_Forward', run: 'Rifle_Run_Forward' },
-  civil: { idle: 'Standing_Idle_Loop', walk: 'Walking', run: 'Jogging' }
+  civil: { idle: 'Standing_Idle_Loop', walk: 'Walk_Natural', run: 'Run_Natural' }
 };
 export const MODELS = {};
 export const CLIPS = {};
@@ -211,6 +211,30 @@ export async function preloadModels(onProgress) {
   CLIP_HIP_Y = tr ? [tr.values[0], tr.values[1], tr.values[2]] : null;
   const tq = ref?.tracks.find(t => t.name === 'Hips.quaternion');
   CLIP_HIP_Q = tq ? new THREE.Quaternion(tq.values[0], tq.values[1], tq.values[2], tq.values[3]) : null;
+  // Natürlicher Gang und Lauf aus dem three.js-Soldaten („Walk“, „Run“), umgerechnet in die Clip-Konvention:
+  // Präfix weg, Hüfte aus dem gedrehten Elternraum des Soldaten (z-up) in y-up und auf die Clip-Hüfthöhe skaliert.
+  const SM = MODELS.soldier;
+  if (SM) {
+    // zusätzlich 180° um die Hochachse: der Soldaten-Clip läuft sonst entgegen der Blickrichtung der übrigen Clips
+    const preQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI).multiply(SM.preInv.clone().invert()), k = CLIP_HIP_REST / SM.hipLen, v = new THREE.Vector3(), q = new THREE.Quaternion();
+    for (const [src, name] of [['Walk', 'Walk_Natural'], ['Run', 'Run_Natural']]) {
+      const c0 = SM.clips.find(c => c.name === src); if (!c0 || CLIPS[name]) continue;
+      const c = c0.clone(); c.name = name;
+      c.tracks = c.tracks.filter(tr => {
+        const [bone, prop] = tr.name.split('.');
+        if (prop === 'scale' || (prop === 'position' && !bone.endsWith('Hips'))) return false;
+        const base = bone.replace(/^mixamorig\d*:?/, '');
+        tr.name = base + '.' + prop;
+        const a = tr.values;
+        if (base === 'Hips' && prop === 'position') for (let i = 0; i < a.length; i += 3) { v.set(a[i], a[i + 1], a[i + 2]).applyQuaternion(preQ).multiplyScalar(k); a[i] = v.x; a[i + 1] = v.y; a[i + 2] = v.z; }
+        if (base === 'Hips' && prop === 'quaternion') for (let i = 0; i < a.length; i += 4) { q.set(a[i], a[i + 1], a[i + 2], a[i + 3]).premultiply(preQ); a[i] = q.x; a[i + 1] = q.y; a[i + 2] = q.z; a[i + 3] = q.w; }
+        return true;
+      });
+      c.userData = { hipRest: CLIP_HIP_REST };
+      CLIPS[name] = c;
+      if (!CLIP_NAMES.includes(name)) CLIP_NAMES.push(name);
+    }
+  }
   return MODELS;
 }
 // Clip an Modell anpassen (Hüftposition skalieren), gecacht

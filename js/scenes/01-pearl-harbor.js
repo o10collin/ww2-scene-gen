@@ -58,7 +58,7 @@ export default {
         const f = H.figure({ color: P.white, glow: H.ROLE.west, strength: 1.4, scale: .5, model: 'civil', seed: i * 7 + k + 1 });
         const lane = lanes[k % lanes.length];
         f.position.set(0, s.userData.deckY, lane.z); s.add(f);                            // freies Seitendeck neben dem Aufbau
-        sailors.push({ f, lane, L: (lane.x1 - lane.x0) * (.7 + r() * .3), ph: r() * 8, pause: .3 + r() * .4, flip: k % 2 });
+        sailors.push({ f, lane, L: (lane.x1 - lane.x0) * (.7 + r() * .3), ph: r() * 8, pause: .3 + r() * .4, flip: k % 2, fallDelay: r() * .35 });
       }
       // ein Hauptbrand am Trefferpunkt (Position wird nach der Flugzeugplanung gesetzt) und ein kleiner Nebenbrand
       const fires = [];
@@ -75,6 +75,27 @@ export default {
     // ---------- Flugzeuge: fliegen von außerhalb des Bildes über das Ziel und wieder hinaus ----------
     const planes = [], bombs = [];
     const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), tmp3 = new THREE.Vector3();
+    // Lage eines Schiffs nach dem Treffer: Rollen (rx), Stampfen (rz), Absinken (y), je nach Untergangsart
+    const shipPose = (sh, t, k) => {
+      const hu = sh.hit === Infinity ? 0 : H.easeOut(H.span(t, sh.hit + .3, sh.hit + (sh.sinkMode === 'capsize' ? 6.5 : 4.5)));
+      if (sh.sinkMode === 'capsize') return { rx: sh.hitSide * hu * 1.1 * k, rz: sh.sinkDir * hu * .08 * k, y: -hu * .9 * k };
+      if (sh.sinkMode === 'stern') return { rx: sh.hitSide * hu * .12 * k, rz: sh.sinkDir * hu * .22 * k, y: -hu * .7 * k };
+      return { rx: sh.hitSide * hu * .3 * k, rz: sh.sinkDir * hu * .04 * k, y: -hu * .45 * k };
+    };
+    // Laufweg eines Matrosen: auf und ab auf dem Seitendeck mit kurzen Pausen an den Enden, nach dem Alarm schneller
+    const sailorWalk = (sa, t, tA) => {
+      const fast = t > tA, v0 = .7, fac = fast ? 2.3 : 1;
+      const tv = (t < tA ? t : tA + (t - tA) * fac) + sa.ph;
+      const T1 = sa.L / v0, C = 2 * (T1 + sa.pause), tau = tv % C, cyc = Math.floor(tv / C);
+      const mid = (sa.lane.x0 + sa.lane.x1) / 2;
+      let x, dir, moving, S = 0;
+      if (tau < T1) { x = -sa.L / 2 + v0 * tau; dir = 1; moving = true; S = cyc * 2 * sa.L + v0 * tau; }
+      else if (tau < T1 + sa.pause) { x = sa.L / 2; dir = 1; moving = false; }
+      else if (tau < 2 * T1 + sa.pause) { x = sa.L / 2 - v0 * (tau - T1 - sa.pause); dir = -1; moving = true; S = cyc * 2 * sa.L + sa.L + v0 * (tau - T1 - sa.pause); }
+      else { x = -sa.L / 2; dir = -1; moving = false; }
+      if (sa.flip) { x = -x; dir = -dir; }
+      return { x: mid + x, dir, moving, S, fast };
+    };
     const velAt = (curve, u, dur, out) => { curve.getPoint(Math.min(1, u + .002), out); curve.getPoint(Math.max(0, u - .002), tmp3); return out.sub(tmp3).divideScalar(.004 * dur); };
     for (let i = 0; i < p.planes; i++) {
       const ship = ships[i % ships.length];
@@ -268,11 +289,12 @@ export default {
         }
         // Schiffe: Schlagseite, Absinken, Brände, Rauch, Matrosen
         for (const sh of ships) {
-          const hu = sh.hit === Infinity ? 0 : H.easeOut(H.span(t, sh.hit + .3, sh.hit + (sh.sinkMode === 'capsize' ? 6.5 : 4.5)));
-          const k = p.listing;
-          if (sh.sinkMode === 'capsize') { sh.s.rotation.x = sh.hitSide * hu * 1.1 * k; sh.s.rotation.z = sh.sinkDir * hu * .08 * k; sh.s.position.y = -hu * .9 * k; }
-          else if (sh.sinkMode === 'stern') { sh.s.rotation.z = sh.sinkDir * hu * .22 * k; sh.s.rotation.x = sh.hitSide * hu * .12 * k; sh.s.position.y = -hu * .7 * k; }
-          else { sh.s.rotation.x = sh.hitSide * hu * .3 * k; sh.s.rotation.z = sh.sinkDir * hu * .04 * k; sh.s.position.y = -hu * .45 * k; }
+          const ps = shipPose(sh, t, p.listing);
+          sh.s.rotation.x = ps.rx; sh.s.rotation.z = ps.rz; sh.s.position.y = ps.y;
+          if (sh.tFall === undefined) {                                                   // erster Zeitpunkt mit zu starker Neigung
+            sh.tFall = Infinity;
+            if (sh.hit !== Infinity) for (let tt = sh.hit; tt < sh.hit + 8; tt += .02) { const q = shipPose(sh, tt, p.listing); if (Math.max(Math.abs(q.rx), Math.abs(q.rz)) > .17) { sh.tFall = tt; break; } }
+          }
           sh.smoke.visible = t > sh.hit + .5; if (sh.smoke.visible) sh.smoke.userData.at(t - sh.hit - .5, .5);
           for (const fl of sh.fires) {
             const near = 1 - Math.min(1, Math.abs(fl.fb.position.x - sh.hitX) / (sh.len * .5)) * .6;   // nahe am Treffer größer
@@ -281,35 +303,37 @@ export default {
           }
           // Matrosen: gehen das Deck ab, halten an den Enden kurz an und drehen um; nach dem Alarm rennen sie
           const tA = Math.min(tAlarm + .6, sh.hit - .6);
-          const roll = sh.s.rotation.x, tilted = Math.abs(roll) > .3;
-          // Zeitpunkt, ab dem die Schlagseite zu groß wird (geschlossen aus der Kenterkurve)
-          const tTilt = sh.sinkMode === 'capsize' && sh.hit !== Infinity ? sh.hit + .3 + (1 - Math.cbrt(1 - Math.min(.999, .3 / (1.1 * Math.max(.01, p.listing))))) * 6.5 : Infinity;
+          const roll = sh.s.rotation.x, B2 = sh.s.userData.beam * .5, deckY = sh.s.userData.deckY;
           for (const sa of sh.sailors) {
-            if (t > tTilt) {                                                             // umfallen, rutschen, über Bord
-              const f = t - tTilt, low = Math.sign(roll);                               // low: Seite, die unter Wasser geht
-              sa.f.rotation.y = low > 0 ? -Math.PI / 2 : Math.PI / 2;                   // Gesicht zur tiefen Seite (+x-Blick um y gedreht)
+            const tF = sh.tFall + sa.fallDelay;
+            if (t > tF) {
+              // Sturz entlang des Laufwegs (zur Wegmitte, weg von Türmen und Davits), danach rutschen mit der Schlagseite:
+              // auf der tiefen Seite über Bord, auf der hohen Seite bis an den Aufbau
+              const fx = sailorWalk(sa, tF, tA).x, fdir = Math.sign((sa.lane.x0 + sa.lane.x1) / 2 - fx) || 1;   // deterministisch aus dem Sturzzeitpunkt
+              const f = t - tF;
+              sa.f.position.x = fx;
+              sa.f.rotation.y = fdir > 0 ? 0 : Math.PI;
               sa.f.userData.pose('Dying_Falling_Forward', f);
-              const slide = Math.max(0, f - .9);
-              sa.f.position.z = sa.lane.z + low * slide * slide * 1.6;
-              const over = Math.abs(sa.f.position.z) - (sh.s.userData.beam * .5 + .2);
-              sa.f.position.y = sh.s.userData.deckY - (over > 0 ? over * 1.5 : 0);
-              sa.f.visible = over < 1.2;
+              const low = Math.sign(roll) || 1, side = Math.sign(sa.lane.z) || 1;
+              const acc = 2.2 * Math.max(0, Math.abs(Math.sin(roll)) - .15), sl = .5 * acc * Math.max(0, f - .7) ** 2;
+              let z = sa.lane.z, y = deckY;
+              if (side === low) {                                                          // tiefe Seite: zur Kante und hinunter
+                z = sa.lane.z + low * sl;
+                const over = Math.abs(z) - (B2 + .05);
+                if (over > 0) y = deckY - over * 2.2;
+                sa.f.visible = y > deckY - 2.5;
+              } else {                                                                     // hohe Seite: bis an die Aufbauwand
+                const wall = sh.s.userData.beam * .31 + .22;
+                z = side * Math.max(wall, Math.abs(sa.lane.z) - sl);
+                sa.f.visible = true;
+              }
+              sa.f.position.z = z; sa.f.position.y = y;
               continue;
             }
-            sa.f.visible = true; sa.f.position.z = sa.lane.z; sa.f.position.y = sh.s.userData.deckY;
-            const fast = t > tA, v0 = .7, fac = fast ? 2.3 : 1;
-            const tv = (t < tA ? t : tA + (t - tA) * fac) + sa.ph;        // gedehnte Zeit: nach Alarm läuft alles schneller
-            const T1 = sa.L / v0, C = 2 * (T1 + sa.pause), tau = tv % C, cyc = Math.floor(tv / C);
-            const mid = (sa.lane.x0 + sa.lane.x1) / 2;
-            let x, dir, moving, S;
-            if (tau < T1) { x = -sa.L / 2 + v0 * tau; dir = 1; moving = true; S = cyc * 2 * sa.L + v0 * tau; }
-            else if (tau < T1 + sa.pause) { x = sa.L / 2; dir = 1; moving = false; S = 0; }
-            else if (tau < 2 * T1 + sa.pause) { x = sa.L / 2 - v0 * (tau - T1 - sa.pause); dir = -1; moving = true; S = cyc * 2 * sa.L + sa.L + v0 * (tau - T1 - sa.pause); }
-            else { x = -sa.L / 2; dir = -1; moving = false; S = 0; }
-            if (sa.flip) { x = -x; dir = -dir; }
-            if (tilted) { moving = false; }                                              // bei starker Schlagseite festhalten
-            if (!tilted) sa.f.position.x = mid + x;
-            sa.f.rotation.y = dir > 0 ? 0 : Math.PI;
+            const w = sailorWalk(sa, t, tA);
+            sa.f.visible = true; sa.f.position.set(w.x, deckY, sa.lane.z);
+            sa.f.rotation.y = w.dir > 0 ? 0 : Math.PI;
+            const fast = w.fast, moving = w.moving, S = w.S;
             if (moving) sa.f.userData.walkDist(S, fast ? 1.3 : 1); else sa.f.userData.idle(t);
           }
         }
