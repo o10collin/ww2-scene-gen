@@ -281,8 +281,22 @@ export default {
           }
           // Matrosen: gehen das Deck ab, halten an den Enden kurz an und drehen um; nach dem Alarm rennen sie
           const tA = Math.min(tAlarm + .6, sh.hit - .6);
-          const tilted = Math.abs(sh.s.rotation.x) > .35;
+          const roll = sh.s.rotation.x, tilted = Math.abs(roll) > .3;
+          // Zeitpunkt, ab dem die Schlagseite zu groß wird (geschlossen aus der Kenterkurve)
+          const tTilt = sh.sinkMode === 'capsize' && sh.hit !== Infinity ? sh.hit + .3 + (1 - Math.cbrt(1 - Math.min(.999, .3 / (1.1 * Math.max(.01, p.listing))))) * 6.5 : Infinity;
           for (const sa of sh.sailors) {
+            if (t > tTilt) {                                                             // umfallen, rutschen, über Bord
+              const f = t - tTilt, low = Math.sign(roll);                               // low: Seite, die unter Wasser geht
+              sa.f.rotation.y = low > 0 ? -Math.PI / 2 : Math.PI / 2;                   // Gesicht zur tiefen Seite (+x-Blick um y gedreht)
+              sa.f.userData.pose('Dying_Falling_Forward', f);
+              const slide = Math.max(0, f - .9);
+              sa.f.position.z = sa.lane.z + low * slide * slide * 1.6;
+              const over = Math.abs(sa.f.position.z) - (sh.s.userData.beam * .5 + .2);
+              sa.f.position.y = sh.s.userData.deckY - (over > 0 ? over * 1.5 : 0);
+              sa.f.visible = over < 1.2;
+              continue;
+            }
+            sa.f.visible = true; sa.f.position.z = sa.lane.z; sa.f.position.y = sh.s.userData.deckY;
             const fast = t > tA, v0 = .7, fac = fast ? 2.3 : 1;
             const tv = (t < tA ? t : tA + (t - tA) * fac) + sa.ph;        // gedehnte Zeit: nach Alarm läuft alles schneller
             const T1 = sa.L / v0, C = 2 * (T1 + sa.pause), tau = tv % C, cyc = Math.floor(tv / C);

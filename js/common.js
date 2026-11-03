@@ -154,6 +154,7 @@ const ROLE_CLIPS = {
 export const MODELS = {};
 export const CLIPS = {};
 let CLIP_HIP_Y = null;
+let CLIP_HIP_Q = null;
 let CLIP_HIP_REST = 1;
 let figureMode = 'glb';           // 'glb' | 'capsule'
 let labelsOn = true;
@@ -208,6 +209,8 @@ export async function preloadModels(onProgress) {
   const tr = ref?.tracks.find(t => t.name === 'Hips.position');
   CLIP_HIP_REST = tr ? Math.hypot(tr.values[0], tr.values[1], tr.values[2]) || 1 : 1;
   CLIP_HIP_Y = tr ? [tr.values[0], tr.values[1], tr.values[2]] : null;
+  const tq = ref?.tracks.find(t => t.name === 'Hips.quaternion');
+  CLIP_HIP_Q = tq ? new THREE.Quaternion(tq.values[0], tq.values[1], tq.values[2], tq.values[3]) : null;
   return MODELS;
 }
 // Clip an Modell anpassen (Hüftposition skalieren), gecacht
@@ -234,6 +237,10 @@ function clipFor(M, name) {
       }
       for (let i = 0; i < a.length; i += 3) { v.set(a[i] * k, a[i + 1] * k, a[i + 2] * k).applyQuaternion(M.preInv); a[i] = v.x; a[i + 1] = v.y; a[i + 2] = v.z; }
     } else if (prop === 'quaternion') {
+      if (BROKEN_HIPS(name) && CLIP_HIP_Q) {                                             // Wurzel des Clips steht schief: auf Referenz-Rig drehen
+        const fix = CLIP_HIP_Q.clone().multiply(new THREE.Quaternion(a[0], a[1], a[2], a[3]).invert());
+        for (let i = 0; i < a.length; i += 4) { q.set(a[i], a[i + 1], a[i + 2], a[i + 3]).premultiply(fix); a[i] = q.x; a[i + 1] = q.y; a[i + 2] = q.z; a[i + 3] = q.w; }
+      }
       for (let i = 0; i < a.length; i += 4) { q.set(a[i], a[i + 1], a[i + 2], a[i + 3]).premultiply(M.preInv); a[i] = q.x; a[i + 1] = q.y; a[i + 2] = q.z; a[i + 3] = q.w; }
     }
   }
@@ -282,8 +289,8 @@ export function figure({ color = P.grey, head = P.skin, helmet = null, scale = 1
     g.userData.speed = 1; g.userData.offset = (n % 97) * .37;
     g.userData.play = (name, time, weight = 1) => {
       if (!actions[name]) name = g.userData.idleName;
-      for (const [nm, a] of Object.entries(actions)) { const on = nm === name; a.enabled = on; a.setEffectiveWeight(on ? weight : 0); }
-      mixer.setTime(time);
+      for (const [nm, a] of Object.entries(actions)) { const on = nm === name; a.enabled = on; a.paused = false; a.setEffectiveWeight(on ? weight : 0); }
+      mixer.setTime(time);                                                            // Einmal-Clips bleiben am Ende stehen (clampWhenFinished), beim Zurückspulen wieder frei
     };
     g.userData.walk = (t, amp = 1) => {
       g.userData.drivenFrame = frameId + 1;
@@ -415,10 +422,10 @@ export function ship(color = P.steel, { length = 8, beam = 1.9, guns = 2, funnel
   if (guns > 1 && L > 11) { const barb = cyl(.45, .5, .3, base, 14); barb.position.set(-L * .27, deckY + .15, 0); g.add(barb); turret(-L * .27, deckY + .3, -1, .8); }
   // Flak-Lafetten an den Seiten der Aufbauten
   const aa = [];
-  for (const side of [-1, 1]) for (const x of [L * .1, -L * .17]) {
-    const m = cyl(.12, .14, .22, darker, 8); m.position.set(x, deckY + 1.16, side * B * .33); g.add(m);
-    const bar = cyl(.025, .03, .7, P.black, 5); bar.position.set(x, deckY + 1.5, side * B * .33); bar.rotation.z = side * .25; g.add(bar);
-    aa.push(new THREE.Vector3(x, deckY + 1.8, side * B * .33));
+  for (const side of [-1, 1]) for (const x of [L * .09, -L * .14]) {
+    const m = cyl(.12, .14, .22, darker, 8); m.position.set(x, deckY + 1.16, side * B * .22); g.add(m);
+    const bar = cyl(.025, .03, .7, P.black, 5); bar.position.set(x, deckY + 1.5, side * B * .22); bar.rotation.z = side * .25; g.add(bar);
+    aa.push(new THREE.Vector3(x, deckY + 1.8, side * B * .22));
   }
   // Rettungsboote an Davits (über den Seitendecks)
   for (const side of [-1, 1]) for (let i = 0; i < 2; i++) {
