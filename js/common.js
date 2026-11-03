@@ -887,11 +887,11 @@ export function fireball(r, { size = 2.5, duration = 3.2, debris = 60, sparks = 
   const add = m => { g.add(m); parts.push(m); return m; };
   add(emitter(r, 1, { map: DOT_TEX(), additive: true, colors: ['#fff0c0', '#ffc060', '#ff8020'], bright: 1.6, fadeIn: .05, fadeOut: .3, grow: .5, renderOrder: 3,
     spawn: () => ({ p: [0, size * .3, 0], v: [0, 0, 0], delay: 0, life: .22, s0: size * 1.2, s1: size * 3.2 }) }));
-  add(emitter(r, 36, { map: FIRE_TEX(), additive: true, colors: ['#ffeaa8', '#ff9a30', '#c83a08'], bright: 1.15, drag: 3.2, gravity: [0, size * 1.2, 0], grow: .5, fadeIn: .08, fadeOut: .45, variation: .4, renderOrder: 2,
+  add(emitter(r, 28, { map: FIRE_TEX(), additive: true, colors: ['#ffeaa8', '#ff9a30', '#c83a08'], bright: 1.1, drag: 3.2, gravity: [0, size * 1.2, 0], grow: .5, fadeIn: .08, fadeOut: .45, variation: .4, renderOrder: 2,
     spawn: () => { const v = sph(r, size * (1.5 + r() * 3)); v[1] = Math.abs(v[1]) + size * .5; return { p: sph(r, size * .25), v, delay: r() * .12, life: .45 + r() * .5, s0: size * .45, s1: size * 1.15 }; } }));
   add(emitter(r, 22, { map: FIRE_TEX(), additive: true, colors: ['#ffeab0', '#ffa838', '#c84008'], bright: 1.05, drag: 2.4, grow: .8, fadeIn: .1, fadeOut: .4, variation: .4, rotate: false, aspect: 2.0, renderOrder: 2,
     spawn: () => ({ p: sph(r, size * .3), v: [(r() - .5) * size * 2.5, size * (4 + r() * 4), (r() - .5) * size * 2.5], delay: .04 + r() * .3, life: .4 + r() * .4, s0: size * .55, s1: size * .25 }) }));
-  add(emitter(r, 60, { map: SMOKE_TEX(), colors: ['#b86a38', '#4a403a', '#1c1a18'], drag: 1.4, gravity: [0, size * .55, 0], grow: .55, opacity: .55, fadeIn: .12, fadeOut: .5, shade: .5, variation: .35, spin: .6, renderOrder: 1,
+  add(emitter(r, 36, { map: SMOKE_TEX(), colors: ['#b86a38', '#4a403a', '#1c1a18'], drag: 1.4, gravity: [0, size * .55, 0], grow: .55, opacity: .55, fadeIn: .12, fadeOut: .5, shade: .5, variation: .35, spin: .6, renderOrder: 1,
     spawn: () => { const v = sph(r, size * (.8 + r() * 2.2)); v[1] = Math.abs(v[1]) * .8 + size * 1.2; return { p: sph(r, size * .35), v, delay: .05 + r() * .7, life: Math.max(1.2, duration - .7) * (.6 + r() * .4), s0: size * .45, s1: size * 2.0 }; } }));
   add(emitter(r, debris, { map: DOT_TEX(), colors: ['#2a2420', '#2a2420', '#2a2420'], gravity: [0, -9.81, 0], drag: .25, grow: 1, fadeIn: 0, fadeOut: .85, variation: .2, renderOrder: 2,
     spawn: () => { const v = sph(r, size * (2 + r() * 4.5)); v[1] = Math.abs(v[1]) + size * 1.5; return { p: [0, size * .2, 0], v, delay: r() * .08, life: 1.3 + r() * 1.3, s0: size * (.05 + r() * .07), s1: size * (.05 + r() * .07) }; } }));
@@ -1121,11 +1121,12 @@ export function wavePlane(w, h, seg = 48, color = P.water, { amp = .12, opts = {
 
 // Fliegerbombe, Spitze zeigt nach +Z (mit lookAt entlang der Flugbahn ausrichten)
 export function bomb(length = 1.1, color = '#23262b') {
+  const m = color instanceof THREE.Material ? color : mat(color);
   const g = new THREE.Group();
-  const body = cyl(.14, .14, length * .6, color, 10); body.rotation.x = Math.PI / 2; g.add(body);
-  const nose = cone(.14, length * .3, color, 10); nose.rotation.x = Math.PI / 2; nose.position.z = length * .45; g.add(nose);
-  const tail = cyl(.08, .14, length * .25, color, 10); tail.rotation.x = Math.PI / 2; tail.position.z = -length * .42; g.add(tail);
-  for (let i = 0; i < 4; i++) { const f = box(.02, .3, .22, color); f.position.z = -length * .45; f.rotation.z = i * Math.PI / 2; g.add(f); }
+  const body = cyl(.16, .16, length * .6, m, 10); body.rotation.x = Math.PI / 2; g.add(body);
+  const nose = cone(.16, length * .3, m, 10); nose.rotation.x = Math.PI / 2; nose.position.z = length * .45; g.add(nose);
+  const tail = cyl(.09, .16, length * .25, m, 10); tail.rotation.x = Math.PI / 2; tail.position.z = -length * .42; g.add(tail);
+  for (let i = 0; i < 4; i++) { const f = box(.02, .36, .26, m); f.position.z = -length * .45; f.rotation.z = i * Math.PI / 2; g.add(f); }
   g.traverse(o => { if (o.isMesh) { o.castShadow = false; } });
   return g;
 }
