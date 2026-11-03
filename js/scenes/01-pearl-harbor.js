@@ -24,7 +24,7 @@ export default {
     tracerSpeed: { type: 'number', min: 20, max: 300, step: 5, value: 110, label: 'Geschossgeschwindigkeit (m/s)', live: true },
     burst: { type: 'number', min: 1, max: 8, step: 1, value: 3, label: 'Schüsse je Feuerstoß' },
     sailorsPer: { type: 'number', min: 0, max: 6, step: 1, value: 2, label: 'Matrosen je Schiff' },
-    crashPlane: { type: 'boolean', value: true, label: 'Ein Flugzeug wird abgeschossen' },
+    shootDown: { type: 'boolean', value: false, label: 'Ein Flugzeug wird abgeschossen (aus)' },
     skyColor: { type: 'color', value: '#101722', label: 'Himmel' },
     waterColor: { type: 'color', value: '#1c2d3e', label: 'Wasser' },
     details: { type: 'boolean', value: true, label: 'Hafendetails (Piers, Kräne, Hangars)' },
@@ -107,7 +107,10 @@ export default {
       let curve;
       if (torpedo) {
         const rel = new THREE.Vector3(target.x - 4, 2.6, target.z + 17);
-        curve = new THREE.CatmullRomCurve3([new THREE.Vector3(target.x - 50, 7 + r() * 3, target.z + 62), rel, new THREE.Vector3(target.x + 55, 18 + r() * 6, target.z - 50)], false, 'catmullrom', .3);
+        // nach dem Abwurf steil hochziehen und mit Abstand über die Masten des Zielschiffs hinweg
+        const climb = new THREE.Vector3(target.x + 1, 11 + r() * 2, target.z + 2);
+        curve = new THREE.CatmullRomCurve3([new THREE.Vector3(target.x - 50, 7 + r() * 3, target.z + 62), rel, climb, new THREE.Vector3(target.x + 55, 20 + r() * 6, target.z - 50)], false, 'catmullrom', .3);
+        curve.userData = { rel };
       } else {
         const over = new THREE.Vector3(target.x, 6 + r() * 2, target.z);
         curve = new THREE.CatmullRomCurve3([new THREE.Vector3(-95, 24 + r() * 6, 6 + r() * 30), over, new THREE.Vector3(75, 16 + r() * 8, 62 + r() * 20)], false, 'catmullrom', .3);
@@ -116,8 +119,10 @@ export default {
       planes.push(pl);
       if (torpedo) {
         // Torpedo: fällt nach dem Abwurf ins Wasser und läuft auf das Schiff zu
-        const tDrop = t0 + dur * .5;
-        const rel = curve.getPoint(.5), v = velAt(curve, .5, dur, new THREE.Vector3());
+        let uDrop = .3, best = 1e9;                                                    // Kurvenparameter am Abwurfpunkt
+        for (let u = 0; u <= 1; u += .002) { const d = curve.getPoint(u).distanceTo(curve.userData.rel); if (d < best) { best = d; uDrop = u; } }
+        const tDrop = t0 + dur * uDrop;
+        const rel = curve.getPoint(uDrop), v = velAt(curve, uDrop, dur, new THREE.Vector3());
         const tSplash = tDrop + Math.sqrt(2 * (rel.y - .2) / G);
         const splashPos = new THREE.Vector3(rel.x + v.x * (tSplash - tDrop), .2, rel.z + v.z * (tSplash - tDrop));
         const end = new THREE.Vector3(target.x, .1, target.z + 1.2);
@@ -163,9 +168,10 @@ export default {
       }
     }
     for (const sh of ships) { const x = Math.max(-sh.len * .4, Math.min(sh.len * .4, sh.hitX)); sh.fires[0].fb.position.x = x; sh.fires[1].fb.position.x = x + (x < 0 ? 2.6 : -2.6); sh.smoke.position.x = x; }
+    scene.userData.planes = planes;
     // ---------- Abschuss: ein Bomber wird nach dem Abwurf von Flak und Leuchtspur getroffen, brennt und stürzt ab ----------
     let crash = null;
-    if (p.crashPlane && planes.some(q => !q.torpedo)) {
+    if (p.shootDown && planes.some(q => !q.torpedo)) {
       const bombers = planes.filter(q => !q.torpedo);
       const pl = bombers[0];
       const uHit = .47, tHitP = pl.t0 + pl.dur * uHit;              // direkt über den Schiffen, kurz nach dem Abwurf
