@@ -5,7 +5,7 @@ const { P } = H;
 const G = 9.81;
 
 export default {
-  id: 'pearl-harbor', title: 'Pearl Harbor', seed: 11, duration: 9,
+  id: 'pearl-harbor', title: 'Pearl Harbor', seed: 11, duration: 10,
   script: 'Wir schreiben das Jahr 1941. Japan greift den US-Stützpunkt Pearl Harbor an.',
   caption: { title: 'Pearl Harbor', sub: '7. Dezember 1941' },
   params: {
@@ -16,13 +16,13 @@ export default {
     attackSpeed: { type: 'number', min: .5, max: 2, step: .05, value: 1, label: 'Angriffstempo' },
     explosionSize: { type: 'number', min: .5, max: 5, step: .1, value: 1.5, label: 'Explosionsgröße' },
     debris: { type: 'number', min: 0, max: 200, step: 10, value: 30, label: 'Trümmer je Explosion' },
-    listing: { type: 'number', min: 0, max: 30, step: 1, value: 12, label: 'Schlagseite nach Treffer (°)' },
+    listing: { type: 'number', min: 0, max: 3, step: .1, value: 1, label: 'Stärke des Untergangs (Schlagseite, Kentern)' },
     splashHeight: { type: 'number', min: 3, max: 20, step: .5, value: 7, label: 'Höhe Wassersäulen' },
     fireSize: { type: 'number', min: .3, max: 3, step: .1, value: .9, label: 'Brände auf den Schiffen' },
-    flak: { type: 'number', min: 0, max: 40, step: 1, value: 6, label: 'Flak-Wolken' },
-    tracers: { type: 'number', min: 0, max: 60, step: 1, value: 8, label: 'Leuchtspur-Geschütze' },
+    flak: { type: 'number', min: 0, max: 40, step: 1, value: 5, label: 'Flak-Wolken' },
+    tracers: { type: 'number', min: 0, max: 60, step: 1, value: 4, label: 'Leuchtspur-Geschütze' },
     tracerSpeed: { type: 'number', min: 20, max: 300, step: 5, value: 110, label: 'Geschossgeschwindigkeit (m/s)', live: true },
-    burst: { type: 'number', min: 1, max: 8, step: 1, value: 4, label: 'Schüsse je Feuerstoß' },
+    burst: { type: 'number', min: 1, max: 8, step: 1, value: 3, label: 'Schüsse je Feuerstoß' },
     sailorsPer: { type: 'number', min: 0, max: 6, step: 1, value: 2, label: 'Matrosen je Schiff' },
     crashPlane: { type: 'boolean', value: true, label: 'Ein Flugzeug wird abgeschossen' },
     skyColor: { type: 'color', value: '#101722', label: 'Himmel' },
@@ -42,27 +42,35 @@ export default {
     }
     // ---------- Schiffe ("Battleship Row") mit Matrosen, Brandherden und Rauch ----------
     const ships = [];
+    const kinds = ['battleship', 'cruiser', 'destroyer', 'battleship', 'cruiser', 'destroyer'];
     for (let i = 0; i < p.ships; i++) {
-      const len = 9 + r() * 3;
-      const s = H.ship(P.steel, { length: len });
-      s.position.set(-14 + i * 8, 0, -6 + (i % 2) * 6 + r() * 2);
-      s.rotation.y = (r() - .5) * .3;
-      scene.add(s);
+      const kind = kinds[i % kinds.length];
+      const len = kind === 'battleship' ? 12.5 + r() * 2 : kind === 'cruiser' ? 10.5 + r() * 1.5 : 8.5 + r() * 1.2;
+      const beam = len * (kind === 'destroyer' ? .17 : .19);
+      const s = H.ship(P.steel, { length: len, beam, guns: kind === 'destroyer' ? 1 : 2, funnels: kind === 'cruiser' ? 2 : 1 + (r() < .4 ? 1 : 0), seed: 100 + i, tint: .85 + r() * .3 });
+      const yaw = new THREE.Group(); yaw.add(s);                                        // Gieren außen, Rollen/Stampfen innen
+      yaw.position.set(-16 + i * 8.5, 0, -6 + (i % 2) * 6.5 + r() * 2);
+      yaw.rotation.y = (r() - .5) * .3;
+      scene.add(yaw);
       const sailors = [];
+      const lanes = s.userData.lanes;
       for (let k = 0; k < p.sailorsPer; k++) {
-        const f = H.figure({ color: P.white, helmet: '#333', glow: H.ROLE.west, strength: 1.4, scale: .5, seed: i * 7 + k + 1 });
-        f.position.set(0, 1.05, (k % 2 ? .72 : -.72)); s.add(f);                       // Seitendeck neben dem Aufbau
-        sailors.push({ f, len, L: len * (.42 + r() * .1), ph: r() * 8, pause: .8 + r() * .8, flip: k % 2 });
+        const f = H.figure({ color: P.white, glow: H.ROLE.west, strength: 1.4, scale: .5, model: 'civil', seed: i * 7 + k + 1 });
+        const lane = lanes[k % lanes.length];
+        f.position.set(0, s.userData.deckY, lane.z); s.add(f);                            // freies Seitendeck neben dem Aufbau
+        sailors.push({ f, lane, L: (lane.x1 - lane.x0) * (.7 + r() * .3), ph: r() * 8, pause: .3 + r() * .4, flip: k % 2 });
       }
       // ein Hauptbrand am Trefferpunkt (Position wird nach der Flugzeugplanung gesetzt) und ein kleiner Nebenbrand
       const fires = [];
       for (let k = 0; k < 2; k++) {
         const fb = H.flame(r, { size: p.fireSize * (k ? .5 : 1), tongues: k ? 3 : 5, embers: k ? 6 : 14, spread: k ? .8 : 1.5 });
-        fb.position.set(0, 1.3, (r() - .5) * .6); fb.visible = false; s.add(fb);
+        fb.position.set(0, s.userData.deckY + .25, (r() - .5) * .6); fb.visible = false; s.add(fb);
         fires.push({ fb, off: k * .9 + r() * .3, k: 1 });
       }
       const smoke = H.smokeColumn(r, { color: '#1c1c20', height: 11, n: 8, width: .7 }); smoke.position.set(0, 2, 0); smoke.visible = false; s.add(smoke);
-      ships.push({ s, len, hit: Infinity, hitX: 0, list: (r() < .5 ? 1 : -1), sailors, fires, smoke });
+      // Untergangsart: Torpedotreffer kentern zur Trefferseite, Bombentreffer sacken über Heck oder Bug weg oder krängen
+      const sinkMode = kind === 'destroyer' ? (r() < .5 ? 'stern' : 'list') : (r() < .5 ? 'capsize' : 'list');
+      ships.push({ s, yaw, len, hit: Infinity, hitX: 0, hitSide: 1, sinkMode, sinkDir: r() < .5 ? 1 : -1, sailors, fires, smoke });
     }
     // ---------- Flugzeuge: fliegen von außerhalb des Bildes über das Ziel und wieder hinaus ----------
     const planes = [], bombs = [];
@@ -70,17 +78,17 @@ export default {
     const velAt = (curve, u, dur, out) => { curve.getPoint(Math.min(1, u + .002), out); curve.getPoint(Math.max(0, u - .002), tmp3); return out.sub(tmp3).divideScalar(.004 * dur); };
     for (let i = 0; i < p.planes; i++) {
       const ship = ships[i % ships.length];
-      const target = ship.s.position.clone();
+      const target = ship.yaw.position.clone();
       const torpedo = i < p.torpedoPlanes;
       const m = H.faceZ(H.aircraft(H.glowMat(H.ROLE.axis)));
       m.visible = false; scene.add(m);
-      const t0 = i * (0.8 / p.attackSpeed) + r() * .2, dur = 4.6 / p.attackSpeed;
+      const t0 = i * (0.9 / p.attackSpeed) + r() * .2, dur = 5.3 / p.attackSpeed;
       let curve;
       if (torpedo) {
         const rel = new THREE.Vector3(target.x - 4, 2.6, target.z + 17);
         curve = new THREE.CatmullRomCurve3([new THREE.Vector3(target.x - 50, 7 + r() * 3, target.z + 62), rel, new THREE.Vector3(target.x + 55, 18 + r() * 6, target.z - 50)], false, 'catmullrom', .3);
       } else {
-        const over = new THREE.Vector3(target.x, 7 + r() * 2.5, target.z);
+        const over = new THREE.Vector3(target.x, 6 + r() * 2, target.z);
         curve = new THREE.CatmullRomCurve3([new THREE.Vector3(-95, 24 + r() * 6, 6 + r() * 30), over, new THREE.Vector3(75, 16 + r() * 8, 62 + r() * 20)], false, 'catmullrom', .3);
       }
       const pl = { m, curve, t0, dur, torpedo, target, ship, bank: (r() - .5) * .8, bombs: [], torp: null };
@@ -93,7 +101,7 @@ export default {
         const splashPos = new THREE.Vector3(rel.x + v.x * (tSplash - tDrop), .2, rel.z + v.z * (tSplash - tDrop));
         const end = new THREE.Vector3(target.x, .1, target.z + 1.2);
         const run = splashPos.distanceTo(end), tHit = tSplash + run / 11;
-        if (tHit < ship.hit) { ship.hit = tHit; ship.hitX = 0; }
+        if (tHit < ship.hit) { ship.hit = tHit; ship.hitX = 0; ship.hitSide = 1; ship.sinkMode = ship.sinkMode === 'stern' ? 'list' : 'capsize'; }
         const torp = H.cyl(.13, .13, 1.9, '#3a3f46', 10); torp.rotation.x = Math.PI / 2; torp.castShadow = false;
         const torpG = new THREE.Group(); torpG.add(torp); torpG.visible = false; scene.add(torpG);
         const wake = new THREE.Mesh(new THREE.BoxGeometry(.3, .04, 1), new THREE.MeshBasicMaterial({ color: '#dfe9f2', transparent: true, opacity: .3, depthWrite: false })); wake.visible = false; scene.add(wake);
@@ -119,11 +127,11 @@ export default {
           if (k === 0) { v.x = (target.x - rel.x) / tf; v.z = (target.z - rel.z) / tf; }   // erste Bombe sitzt
           const land = new THREE.Vector3(rel.x + v.x * tf, 1.2, rel.z + v.z * tf);
           const onShip = Math.hypot(land.x - target.x, land.z - target.z) < ship.len * .5 + .8;
-          const model = H.bomb(1.7, H.glowMat(H.ROLE.axis, 1.2)); model.visible = false; scene.add(model);
+          const model = H.bomb(2.1, H.glowMat(H.ROLE.axis, 1.2), .21); model.visible = false; scene.add(model);
           let boom = null, splash = null;
           if (onShip) {
             boom = H.fireball(r, { size: p.explosionSize, duration: 3.0, debris: p.debris, sparks: 60 }); boom.position.copy(land).setY(1.4); scene.add(boom);
-            if (tHit < ship.hit) { ship.hit = tHit; ship.hitX = land.x - target.x; }
+            if (tHit < ship.hit) { ship.hit = tHit; ship.hitX = land.x - target.x; ship.hitSide = land.z > target.z ? 1 : -1; }
           } else {
             splash = H.waterColumn(r, { height: p.splashHeight * (.8 + r() * .5), radius: .55 + r() * .3, duration: 2.8, drops: 140 }); splash.position.copy(land).setY(.25); scene.add(splash);
             boom = H.fireball(r, { size: p.explosionSize * .45, duration: 1.2, debris: 0, sparks: 30, ring: false }); boom.position.copy(land).setY(.4); scene.add(boom);
@@ -168,12 +176,13 @@ export default {
     const tracers = [];
     for (let i = 0; i < p.tracers; i++) {
       const ship = ships[i % ships.length];
-      const from = ship.s.position.clone().add(new THREE.Vector3((r() - .5) * ship.len * .6, 1.8, 0));
-      const pl = crash && i < 3 ? crash.pl : planes[(i * 7 + 3) % planes.length];
+      ship.yaw.updateMatrixWorld(true);
+      const from = ship.s.userData.aa[i % ship.s.userData.aa.length].clone().applyMatrix4(ship.yaw.matrixWorld);
+      const pl = crash && i < 2 ? crash.pl : planes[(i * 7 + 3) % planes.length];
       const shots = [];
       for (let m = 0; m < p.burst; m++) { const sh = H.tracerShot(r() < .5 ? '#ffd27a' : '#ff9a5a', 2.2 + r() * .8); sh.visible = false; scene.add(sh); shots.push({ sh, jit: new THREE.Vector3((r() - .5) * .9, (r() - .5) * .5, (r() - .5) * .9) }); }
       const flash = H.glowSprite('#ffd080', 1.4); flash.position.copy(from); flash.visible = false; scene.add(flash);
-      tracers.push({ shots, flash, from, pl, scatter: new THREE.Vector3((r() - .5) * 6, (r() - .5) * 3, (r() - .5) * 6), off: r() * .6, period: .9 + r() * .5, gap: .07 + r() * .03, aim: new THREE.Vector3(), up: crash && i < 3 ? 0 : .35 + r() * .4, dir: new THREE.Vector3() });
+      tracers.push({ shots, flash, from, pl, scatter: new THREE.Vector3((r() - .5) * 6, (r() - .5) * 3, (r() - .5) * 6), off: r() * .8, period: 1.6 + r() * .8, gap: .09 + r() * .03, aim: new THREE.Vector3(), up: crash && i < 2 ? 0 : .35 + r() * .4, dir: new THREE.Vector3() });
     }
     // ---------- Ölbrände auf dem Wasser neben getroffenen Schiffen ----------
     const fires = [], slicks = [];
@@ -259,9 +268,11 @@ export default {
         }
         // Schiffe: Schlagseite, Absinken, Brände, Rauch, Matrosen
         for (const sh of ships) {
-          const hu = sh.hit === Infinity ? 0 : H.easeOut(H.span(t, sh.hit + .3, sh.hit + 4.5));
-          sh.s.rotation.z = sh.list * hu * p.listing * Math.PI / 180;
-          sh.s.position.y = -hu * .45;
+          const hu = sh.hit === Infinity ? 0 : H.easeOut(H.span(t, sh.hit + .3, sh.hit + (sh.sinkMode === 'capsize' ? 6.5 : 4.5)));
+          const k = p.listing;
+          if (sh.sinkMode === 'capsize') { sh.s.rotation.x = sh.hitSide * hu * 1.1 * k; sh.s.rotation.z = sh.sinkDir * hu * .08 * k; sh.s.position.y = -hu * .9 * k; }
+          else if (sh.sinkMode === 'stern') { sh.s.rotation.z = sh.sinkDir * hu * .22 * k; sh.s.rotation.x = sh.hitSide * hu * .12 * k; sh.s.position.y = -hu * .7 * k; }
+          else { sh.s.rotation.x = sh.hitSide * hu * .3 * k; sh.s.rotation.z = sh.sinkDir * hu * .04 * k; sh.s.position.y = -hu * .45 * k; }
           sh.smoke.visible = t > sh.hit + .5; if (sh.smoke.visible) sh.smoke.userData.at(t - sh.hit - .5, .5);
           for (const fl of sh.fires) {
             const near = 1 - Math.min(1, Math.abs(fl.fb.position.x - sh.hitX) / (sh.len * .5)) * .6;   // nahe am Treffer größer
@@ -270,17 +281,20 @@ export default {
           }
           // Matrosen: gehen das Deck ab, halten an den Enden kurz an und drehen um; nach dem Alarm rennen sie
           const tA = Math.min(tAlarm + .6, sh.hit - .6);
+          const tilted = Math.abs(sh.s.rotation.x) > .35;
           for (const sa of sh.sailors) {
             const fast = t > tA, v0 = .7, fac = fast ? 2.3 : 1;
             const tv = (t < tA ? t : tA + (t - tA) * fac) + sa.ph;        // gedehnte Zeit: nach Alarm läuft alles schneller
             const T1 = sa.L / v0, C = 2 * (T1 + sa.pause), tau = tv % C, cyc = Math.floor(tv / C);
+            const mid = (sa.lane.x0 + sa.lane.x1) / 2;
             let x, dir, moving, S;
             if (tau < T1) { x = -sa.L / 2 + v0 * tau; dir = 1; moving = true; S = cyc * 2 * sa.L + v0 * tau; }
             else if (tau < T1 + sa.pause) { x = sa.L / 2; dir = 1; moving = false; S = 0; }
             else if (tau < 2 * T1 + sa.pause) { x = sa.L / 2 - v0 * (tau - T1 - sa.pause); dir = -1; moving = true; S = cyc * 2 * sa.L + sa.L + v0 * (tau - T1 - sa.pause); }
             else { x = -sa.L / 2; dir = -1; moving = false; S = 0; }
             if (sa.flip) { x = -x; dir = -dir; }
-            sa.f.position.x = x;
+            if (tilted) { moving = false; }                                              // bei starker Schlagseite festhalten
+            if (!tilted) sa.f.position.x = mid + x;
             sa.f.rotation.y = dir > 0 ? 0 : Math.PI;
             if (moving) sa.f.userData.walkDist(S, fast ? 1.3 : 1); else sa.f.userData.idle(t);
           }

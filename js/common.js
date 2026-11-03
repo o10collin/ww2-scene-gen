@@ -146,10 +146,10 @@ export const CLIP_NAMES = ['Standing_Idle_Loop', 'Standing_Idle', 'Walking', 'Ru
 const ONESHOT = n => /Dying|Death|Salute|Pointing_Onward|Stepping_Forward/.test(n);
 const BROKEN_HIPS = n => n === 'Walking';   // Hüftspur dieses Clips liegt auf Bodenhöhe
 // Meter pro Clip-Durchlauf (vor dem Entfernen der Wurzelbewegung gemessen), damit Schritte zur Strecke passen
-const LOOP_M = { Rifle_Walk_Forward: 1.94, Rifle_Run_Forward: 2.43, Rifle_Walking_Crouched: 1.21, Injured_Walking: 2.1, Walking: 1.55, Running_Fast: 2.2, Jogging: 2.5, Pushing_Heavy_Object: 1.21 };
+const LOOP_M = { Rifle_Walk_Forward: 1.94, Rifle_Run_Forward: 2.43, Rifle_Walking_Crouched: 1.21, Injured_Walking: 2.1, Walking: 1.55, Running_Fast: 2.2, Jogging: 5.09, Pushing_Heavy_Object: 1.21 };
 const ROLE_CLIPS = {
   soldier: { idle: 'Rifle_Idle', walk: 'Rifle_Walk_Forward', run: 'Rifle_Run_Forward' },
-  civil: { idle: 'Standing_Idle_Loop', walk: 'Walking', run: 'Running_Fast' }
+  civil: { idle: 'Standing_Idle_Loop', walk: 'Walking', run: 'Jogging' }
 };
 export const MODELS = {};
 export const CLIPS = {};
@@ -357,35 +357,86 @@ export function aircraft(color = P.grey, { span: wing = 3.2, length = 2.6, engin
   return g;
 }
 
-export function ship(color = P.steel, { length = 8, beam = 1.8, guns = 2 } = {}) {
+// Kriegsschiff: Rumpf als extrudierte Form mit spitzem Bug, Deck, gestaffelte Aufbauten mit Brücke, 1–2 geneigte
+// Schornsteine, Masten, Geschütztürme mit Doppelrohren, Flak-Lafetten, Rettungsboote an Davits, Reling.
+// userData: lanes (freie Laufwege auf den Seitendecks), aa (Flak-Positionen), deckY, len, beam
+export function ship(color = P.steel, { length = 8, beam = 1.9, guns = 2, funnels = 1, seed = 1, tint = 1 } = {}) {
   const g = new THREE.Group();
-  const dark = new THREE.Color(color).multiplyScalar(.55);
-  const hull = box(length, .9, beam, color); hull.position.y = .45;
-  const bow = cone(beam / 2, 1.6, color, 4); bow.rotation.z = -Math.PI / 2; bow.rotation.x = Math.PI / 4; bow.position.set(length / 2 + .8, .45, 0);
-  const stripe = box(length * .98, .12, beam + .02, dark); stripe.position.y = .7;
-  const deck = box(length * .9, .15, beam * .9, P.darkGrey); deck.position.y = .95;
-  const sup = box(length * .3, 1.2, beam * .7, color); sup.position.set(-length * .05, 1.6, 0);
-  const sup2 = box(length * .2, .7, beam * .55, color); sup2.position.set(-length * .04, 2.55, 0);
-  const bridge = box(length * .12, .5, beam * .6, dark); bridge.position.set(length * .03, 3.1, 0);
-  const funnel = cyl(.25, .3, 1.3, P.darkGrey, 10); funnel.position.set(-length * .22, 2.3, 0);
-  const funnelTop = cyl(.3, .25, .15, P.black, 10); funnelTop.position.set(-length * .22, 3.0, 0);
-  const mast = cyl(.05, .05, 2.6, P.darkGrey, 6); mast.position.set(length * .1, 3.6, 0);
-  const yard = box(1.2, .05, .05, P.darkGrey); yard.position.set(length * .1, 4.2, 0); yard.rotation.y = Math.PI / 2;
-  const mast2 = cyl(.04, .04, 1.8, P.darkGrey, 6); mast2.position.set(-length * .3, 2.6, 0);
-  g.add(hull, bow, stripe, deck, sup, sup2, bridge, funnel, funnelTop, mast, yard, mast2);
-  // Rettungsboote und Reling
+  const rr = rng(seed);
+  const base = new THREE.Color(color).multiplyScalar(tint);
+  const dark = base.clone().multiplyScalar(.55), deckC = base.clone().multiplyScalar(.75), darker = base.clone().multiplyScalar(.4);
+  const L = length, B = beam, H2 = .95;
+  // Rumpfform (x entlang der Länge, Bug bei +x)
+  const outline = (scale = 1) => {
+    const sh = new THREE.Shape();
+    const b = B * .5 * scale, l = L * .5 * scale;
+    sh.moveTo(-l * .97, -b * .55); sh.quadraticCurveTo(-l * 1.02, 0, -l * .97, b * .55);
+    sh.lineTo(-l * .9, b); sh.lineTo(l * .3, b); sh.quadraticCurveTo(l * .85, b * .55, l * 1.08, 0);
+    sh.quadraticCurveTo(l * .85, -b * .55, l * .3, -b); sh.lineTo(-l * .9, -b); sh.closePath();
+    return sh;
+  };
+  const extrude = (shape, depth, c) => { const m = mesh(new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, curveSegments: 10 }), c); m.rotation.x = -Math.PI / 2; return m; };
+  const hull = extrude(outline(), H2, base); hull.position.y = 0; g.add(hull);
+  const stripe = extrude(outline(1.012), .16, dark); stripe.position.y = .3; g.add(stripe);
+  const deck = extrude(outline(.965), .06, deckC); deck.position.y = H2; g.add(deck);
+  const deckY = H2 + .06;
+  // Aufbauten
+  const sup = box(L * .32, 1.05, B * .62, base); sup.position.set(-L * .03, deckY + .52, 0); g.add(sup);
+  const sup2 = box(L * .2, .65, B * .5, base); sup2.position.set(-L * .02, deckY + 1.37, 0); g.add(sup2);
+  const bridge = box(L * .11, .5, B * .56, base); bridge.position.set(L * .05, deckY + 1.95, 0); g.add(bridge);
+  const windows = box(L * .11 + .02, .14, B * .56 + .02, darker); windows.position.set(L * .05, deckY + 2.05, 0); windows.castShadow = false; g.add(windows);
+  const wing = box(L * .06, .08, B * .9, dark); wing.position.set(L * .07, deckY + 1.7, 0); g.add(wing);
+  const roof = box(L * .07, .3, B * .3, dark); roof.position.set(L * .04, deckY + 2.35, 0); g.add(roof);
+  const sl = cyl(.1, .1, .2, P.black, 8); sl.rotation.z = Math.PI / 2; sl.position.set(L * .05, deckY + 2.6, 0); g.add(sl);
+  // Schornsteine, geneigt
+  for (let i = 0; i < funnels; i++) {
+    const x = -L * (.13 + i * .11);
+    const f = cyl(.22, .28, 1.5, dark, 12); f.position.set(x, deckY + 1.6, 0); f.rotation.z = .14; g.add(f);
+    const cap = cyl(.26, .23, .14, P.black, 12); cap.position.set(x - .2, deckY + 2.38, 0); cap.rotation.z = .14; g.add(cap);
+  }
+  // Masten
+  const mast = cyl(.05, .06, 3.2, darker, 6); mast.position.set(L * .12, deckY + 2.6, 0); g.add(mast);
+  for (const dz of [-.25, .25]) { const leg = cyl(.03, .03, 2.0, darker, 5); leg.position.set(L * .12 - .25, deckY + 1.8, dz); leg.rotation.z = .12; leg.rotation.x = dz > 0 ? -.12 : .12; g.add(leg); }
+  const yard = box(.05, .05, 1.6, darker); yard.position.set(L * .12, deckY + 3.6, 0); g.add(yard);
+  const nest = cyl(.18, .14, .25, darker, 8); nest.position.set(L * .12, deckY + 3.2, 0); g.add(nest);
+  const mast2 = cyl(.04, .05, 2.2, darker, 6); mast2.position.set(-L * .32, deckY + 1.9, 0); g.add(mast2);
+  const yard2 = box(.04, .04, 1.1, darker); yard2.position.set(-L * .32, deckY + 2.7, 0); g.add(yard2);
+  // Geschütztürme mit Doppelrohren
+  const turret = (x, y, dir, big = 1) => {
+    const t = new THREE.Group();
+    const body = cyl(.42 * big, .46 * big, .36, base, 14); body.position.y = .18; t.add(body);
+    const front = box(.5 * big, .32, .7 * big, base); front.position.set(dir * .25 * big, .17, 0); t.add(front);
+    for (const dz of [-.13 * big, .13 * big]) { const bar = cyl(.04, .05, 1.4 * big, darker, 6); bar.rotation.z = -dir * Math.PI / 2; bar.rotation.x = 0; bar.position.set(dir * (.35 * big + .7 * big), .25, dz); bar.rotation.y = 0; bar.rotateOnWorldAxis(new THREE.Vector3(0, 0, 1), 0); t.add(bar); }
+    t.position.set(x, y, 0); g.add(t); return t;
+  };
+  turret(L * .3, deckY, 1, 1);
+  if (guns > 1) { const barb = cyl(.5, .55, .35, base, 14); barb.position.set(L * .19, deckY + .17, 0); g.add(barb); turret(L * .19, deckY + .35, 1, .9); }
+  turret(-L * .37, deckY, -1, .9);
+  if (guns > 1 && L > 11) { const barb = cyl(.45, .5, .3, base, 14); barb.position.set(-L * .27, deckY + .15, 0); g.add(barb); turret(-L * .27, deckY + .3, -1, .8); }
+  // Flak-Lafetten an den Seiten der Aufbauten
+  const aa = [];
+  for (const side of [-1, 1]) for (const x of [L * .1, -L * .17]) {
+    const m = cyl(.12, .14, .22, darker, 8); m.position.set(x, deckY + 1.16, side * B * .33); g.add(m);
+    const bar = cyl(.025, .03, .7, P.black, 5); bar.position.set(x, deckY + 1.5, side * B * .33); bar.rotation.z = side * .25; g.add(bar);
+    aa.push(new THREE.Vector3(x, deckY + 1.8, side * B * .33));
+  }
+  // Rettungsboote an Davits (über den Seitendecks)
+  for (const side of [-1, 1]) for (let i = 0; i < 2; i++) {
+    const x = -L * .07 - i * L * .11;
+    const lb = mesh(new THREE.CapsuleGeometry(.11, .55, 3, 7), dark); lb.rotation.z = Math.PI / 2; lb.position.set(x, deckY + 1.15, side * (B * .5 + .08)); g.add(lb);
+    for (const dx of [-.3, .3]) { const dv = cyl(.02, .02, .55, darker, 4); dv.position.set(x + dx, deckY + 1.2, side * (B * .5 + .02)); dv.rotation.x = side * .5; g.add(dv); }
+  }
+  // Reling und Deckdetails
   for (const side of [-1, 1]) {
-    for (let i = 0; i < 2; i++) { const lb = mesh(new THREE.CapsuleGeometry(.12, .5, 3, 6), dark); lb.rotation.z = Math.PI / 2; lb.position.set(-length * .15 + i * 1.3, 1.45, side * beam * .45); g.add(lb); }
-    const rail = box(length * .88, .03, .03, P.darkGrey); rail.position.set(0, 1.35, side * beam * .44); rail.castShadow = false; g.add(rail);
-    for (let i = 0; i < Math.floor(length / 1.2); i++) { const post = cyl(.02, .02, .35, P.darkGrey, 4); post.castShadow = false; post.position.set(-length * .44 + i * 1.2, 1.2, side * beam * .44); g.add(post); }
+    const rail = box(L * .78, .025, .025, darker); rail.position.set(-L * .09, deckY + .36, side * B * .47); rail.castShadow = false; g.add(rail);
+    for (let i = 0; i < Math.floor(L * .78 / 1.1); i++) { const post = cyl(.015, .015, .36, darker, 4); post.castShadow = false; post.position.set(-L * .48 + i * 1.1, deckY + .18, side * B * .47); g.add(post); }
+    const bowRail = box(L * .26, .025, .025, darker); bowRail.position.set(L * .55, deckY + .36, side * B * .3); bowRail.rotation.y = -side * .33; bowRail.castShadow = false; g.add(bowRail);
   }
-  for (let i = 0; i < guns; i++) {
-    const t = cyl(.4, .45, .4, color, 12); t.position.set(length * .3 - i * .9, 1.2, 0);
-    for (const dz of [-.12, .12]) { const b = cyl(.04, .05, 1.3, P.darkGrey, 6); b.rotation.z = -Math.PI / 2; b.position.set(length * .3 - i * .9 + .75, 1.28, dz); g.add(b); }
-    g.add(t);
-  }
-  const aft = cyl(.4, .45, .4, color, 12); aft.position.set(-length * .4, 1.2, 0); g.add(aft);
-  const aftB = cyl(.04, .05, 1.2, P.darkGrey, 6); aftB.rotation.z = Math.PI / 2; aftB.position.set(-length * .4 - .7, 1.28, 0); g.add(aftB);
+  const capstan = cyl(.12, .14, .22, darker, 8); capstan.position.set(L * .44, deckY + .1, 0); g.add(capstan);
+  for (const side of [-1, 1]) { const anchor = box(.12, .25, .08, P.black); anchor.position.set(L * .45, .62, side * B * .34); g.add(anchor); }
+  for (let i = 0; i < 3; i++) { const vent = cyl(.08, .1, .5, dark, 8); vent.position.set(-L * (.2 + i * .08), deckY + .25, (i % 2 ? 1 : -1) * B * .28); g.add(vent); const vh = sphere(.11, dark, 8); vh.position.set(vent.position.x, deckY + .52, vent.position.z); g.add(vh); }
+  g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  g.userData = { deckY, len: L, beam: B, aa, lanes: [{ x0: -L * .3, x1: L * .14, z: B * .5 - .2 }, { x0: -L * .3, x1: L * .14, z: -(B * .5 - .2) }] };
   return g;
 }
 
@@ -1132,13 +1183,13 @@ export function wavePlane(w, h, seg = 48, color = P.water, { amp = .12, opts = {
 }
 
 // Fliegerbombe, Spitze zeigt nach +Z (mit lookAt entlang der Flugbahn ausrichten)
-export function bomb(length = 1.1, color = '#23262b') {
+export function bomb(length = 1.1, color = '#23262b', rad = .16) {
   const m = color instanceof THREE.Material ? color : mat(color);
   const g = new THREE.Group();
-  const body = cyl(.16, .16, length * .6, m, 10); body.rotation.x = Math.PI / 2; g.add(body);
-  const nose = cone(.16, length * .3, m, 10); nose.rotation.x = Math.PI / 2; nose.position.z = length * .45; g.add(nose);
-  const tail = cyl(.09, .16, length * .25, m, 10); tail.rotation.x = Math.PI / 2; tail.position.z = -length * .42; g.add(tail);
-  for (let i = 0; i < 4; i++) { const f = box(.02, .36, .26, m); f.position.z = -length * .45; f.rotation.z = i * Math.PI / 2; g.add(f); }
+  const body = cyl(rad, rad, length * .6, m, 10); body.rotation.x = Math.PI / 2; g.add(body);
+  const nose = cone(rad, length * .3, m, 10); nose.rotation.x = Math.PI / 2; nose.position.z = length * .45; g.add(nose);
+  const tail = cyl(rad * .55, rad, length * .25, m, 10); tail.rotation.x = Math.PI / 2; tail.position.z = -length * .42; g.add(tail);
+  for (let i = 0; i < 4; i++) { const f = box(.02, rad * 2.3, rad * 1.6, m); f.position.z = -length * .45; f.rotation.z = i * Math.PI / 2; g.add(f); }
   g.traverse(o => { if (o.isMesh) { o.castShadow = false; } });
   return g;
 }
