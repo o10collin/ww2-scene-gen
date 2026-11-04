@@ -118,11 +118,16 @@ export default {
       const t0 = i * (0.8 / p.attackSpeed) + r() * .2, dur = (torpedo ? 5.3 : 5.8) / p.attackSpeed;
       let curve;
       if (torpedo) {
-        const rel = new THREE.Vector3(target.x - 10, 3.2, target.z + 9);
-        // flacher Anflug, nach dem Abwurf sanft hochziehen und mit Abstand über die Masten des Zielschiffs hinweg
-        const climb = new THREE.Vector3(target.x + 7, 9 + r() * 1.5, target.z - 3);
-        curve = new THREE.CatmullRomCurve3([new THREE.Vector3(target.x - 60, 5.5 + r(), target.z + 14), rel, climb, new THREE.Vector3(target.x + 60, 17 + r() * 3, target.z - 20)], false, 'catmullrom', .3);
-        curve.userData = { rel };
+        // Geradliniger Angriff schräg auf die Bordwand: Anflug, Abwurf, Fall und Torpedolauf liegen auf einer Linie,
+        // danach zieht der Flieger über das Zielschiff hoch. Kein Abknicken des Torpedos.
+        const d = new THREE.Vector3(1, 0, -.42).normalize();
+        const impact = new THREE.Vector3(target.x + (r() - .5) * ship.len * .25, 0, target.z + ship.s.userData.beam * .5);
+        const splash0 = impact.clone().addScaledVector(d, -13);
+        const rel = splash0.clone().addScaledVector(d, -18).setY(3.2);                  // etwa Flugstrecke während des Falls
+        curve = new THREE.CatmullRomCurve3([
+          rel.clone().addScaledVector(d, -55).setY(6 + r()), rel,
+          impact.clone().addScaledVector(d, 5).setY(8.5 + r()), impact.clone().addScaledVector(d, 60).setY(18 + r() * 3)], false, 'catmullrom', .3);
+        curve.userData = { rel, impact };
       } else {
         // Sturzkampfbomber: hoch anfliegen, steil auf das Ziel herabstoßen, kurz davor ausklinken, abfangen und steigen
         const lane = (r() - .5) * 2;                                                    // parallel zur Schiffsreihe, nicht auf die Kamera zu
@@ -140,9 +145,12 @@ export default {
         for (let u = 0; u <= 1; u += .002) { const d = curve.getPointAt(u).distanceTo(curve.userData.rel); if (d < best) { best = d; uDrop = u; } }
         const tDrop = t0 + dur * uDrop;
         const rel = curve.getPointAt(uDrop), v = velAt(curve, uDrop, dur, new THREE.Vector3());
-        const tSplash = tDrop + Math.sqrt(2 * (rel.y - .2) / G);
+        const tSplash = tDrop + fallTime(rel, v, .2);
         const splashPos = new THREE.Vector3(rel.x + v.x * (tSplash - tDrop), .2, rel.z + v.z * (tSplash - tDrop));
-        const end = new THREE.Vector3(target.x, .1, target.z + 1.2);
+        // Lauf geradeaus in Flugrichtung bis zur Bordwand (Schnitt mit der Schiffsseite)
+        const dirH = new THREE.Vector3(v.x, 0, v.z).normalize();
+        const sRun = dirH.z < -.05 ? (curve.userData.impact.z - splashPos.z) / dirH.z : splashPos.distanceTo(curve.userData.impact);
+        const end = splashPos.clone().addScaledVector(dirH, Math.max(2, sRun)).setY(.1);
         const run = splashPos.distanceTo(end), tHit = tSplash + run / 11;
         if (tHit < ship.hit) { ship.hit = tHit; ship.hitX = 0; ship.hitSide = 1; ship.sinkMode = ship.sinkMode === 'stern' ? 'list' : 'capsize'; }
         addBlast(ship, end, tHit, 1.4 + p.explosionSize);
