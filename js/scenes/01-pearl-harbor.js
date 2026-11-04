@@ -19,6 +19,7 @@ export default {
     splashHeight: { type: 'number', min: 3, max: 20, step: .5, value: 7, label: 'Höhe Wassersäulen' },
     fireSize: { type: 'number', min: .3, max: 3, step: .1, value: .9, label: 'Brände auf den Schiffen' },
     sailorsPer: { type: 'number', min: 0, max: 6, step: 1, value: 2, label: 'Matrosen je Schiff' },
+    bombColor: { type: 'color', value: '#ffd23a', label: 'Bomben und Torpedos' },
     skyColor: { type: 'color', value: '#101722', label: 'Himmel' },
     waterColor: { type: 'color', value: '#1c2d3e', label: 'Wasser' },
     details: { type: 'boolean', value: true, label: 'Hafendetails (Piers, Kräne, Hangars)' },
@@ -145,7 +146,7 @@ export default {
         const run = splashPos.distanceTo(end), tHit = tSplash + run / 11;
         if (tHit < ship.hit) { ship.hit = tHit; ship.hitX = 0; ship.hitSide = 1; ship.sinkMode = ship.sinkMode === 'stern' ? 'list' : 'capsize'; }
         addBlast(ship, end, tHit, 1.4 + p.explosionSize);
-        const torp = H.cyl(.17, .17, 2.3, H.glowMat(H.ROLE.axis, 1.2), 8); torp.rotation.x = Math.PI / 2; torp.castShadow = false;   // leuchtet wie die Bomben
+        const torp = H.cyl(.17, .17, 2.3, H.glowMat(p.bombColor, 1.25), 8); torp.rotation.x = Math.PI / 2; torp.castShadow = false;   // leuchtet wie die Bomben
         const torpG = new THREE.Group(); torpG.add(torp); torpG.visible = false; scene.add(torpG);
         const wake = new THREE.Mesh(new THREE.BoxGeometry(.45, .04, 1), new THREE.MeshBasicMaterial({ color: '#e6eef5', transparent: true, opacity: .5, depthWrite: false })); wake.visible = false; scene.add(wake);
         const entry = H.waterColumn(r, { height: 2.5, radius: .35, duration: 1.4, drops: 40 }); entry.position.copy(splashPos); scene.add(entry);
@@ -180,7 +181,7 @@ export default {
           const hitShip = shipAt(land.x, land.z);                                        // auch ein Nachbarschiff kann getroffen werden
           const onShip = !!hitShip;
           if (!onShip) { const tw = fallTime(rel, v, .25); land = new THREE.Vector3(rel.x + v.x * tw, .25, rel.z + v.z * tw); tHitB = tDrop + tw; }   // Fehlwurf fällt bis aufs Wasser
-          const model = H.bomb(2.1, H.glowMat(H.ROLE.axis, 1.2), .21); model.visible = false; scene.add(model);
+          const model = H.bomb(2.1, H.glowMat(p.bombColor, 1.25), .21); model.visible = false; scene.add(model);
           let boom = null, splash = null;
           if (onShip) {
             boom = H.fireball(r, { size: p.explosionSize, duration: 3.0, debris: p.debris, sparks: 60 }); boom.position.copy(land).setY(1.4); scene.add(boom);
