@@ -19,12 +19,7 @@ export default {
     listing: { type: 'number', min: 0, max: 3, step: .1, value: 1, label: 'Stärke des Untergangs (Schlagseite, Kentern)' },
     splashHeight: { type: 'number', min: 3, max: 20, step: .5, value: 7, label: 'Höhe Wassersäulen' },
     fireSize: { type: 'number', min: .3, max: 3, step: .1, value: .9, label: 'Brände auf den Schiffen' },
-    flak: { type: 'number', min: 0, max: 40, step: 1, value: 5, label: 'Flak-Wolken' },
-    tracers: { type: 'number', min: 0, max: 60, step: 1, value: 4, label: 'Leuchtspur-Geschütze' },
-    tracerSpeed: { type: 'number', min: 20, max: 300, step: 5, value: 110, label: 'Geschossgeschwindigkeit (m/s)', live: true },
-    burst: { type: 'number', min: 1, max: 8, step: 1, value: 3, label: 'Schüsse je Feuerstoß' },
     sailorsPer: { type: 'number', min: 0, max: 6, step: 1, value: 2, label: 'Matrosen je Schiff' },
-    shootDown: { type: 'boolean', value: false, label: 'Ein Flugzeug wird abgeschossen (aus)' },
     skyColor: { type: 'color', value: '#101722', label: 'Himmel' },
     waterColor: { type: 'color', value: '#1c2d3e', label: 'Wasser' },
     details: { type: 'boolean', value: true, label: 'Hafendetails (Piers, Kräne, Hangars)' },
@@ -168,75 +163,8 @@ export default {
       }
     }
     for (const sh of ships) { const x = Math.max(-sh.len * .4, Math.min(sh.len * .4, sh.hitX)); sh.fires[0].fb.position.x = x; sh.fires[1].fb.position.x = x + (x < 0 ? 2.6 : -2.6); sh.smoke.position.x = x; }
-    scene.userData.planes = planes;
-    // ---------- Abschuss: ein Bomber wird nach dem Abwurf von Flak und Leuchtspur getroffen, brennt und stürzt ab ----------
-    let crash = null;
-    if (p.shootDown && planes.some(q => !q.torpedo)) {
-      const bombers = planes.filter(q => !q.torpedo);
-      const pl = bombers[0];
-      const uHit = .47, tHitP = pl.t0 + pl.dur * uHit;              // direkt über den Schiffen, kurz nach dem Abwurf
-      const start = pl.curve.getPoint(uHit), v0 = velAt(pl.curve, uHit, pl.dur, new THREE.Vector3());
-      const fallDur = 2.0;
-      const dirH = new THREE.Vector3(v0.x, 0, v0.z).normalize();
-      const end = new THREE.Vector3(start.x + dirH.x * 16, .2, start.z + dirH.z * 16);   // bremst ab und schlägt im Bild ein
-      const fall = new THREE.QuadraticBezierCurve3(start, new THREE.Vector3(start.x + dirH.x * 10, start.y * .85, start.z + dirH.z * 10), end);
-      const fire = H.flame(r, { size: .9, tongues: 6, embers: 12, spread: .8 }); pl.m.add(fire); fire.position.set(0, -.1, .3);
-      const smokeTrail = H.trail(r, (u, out) => fall.getPoint(u, out), { duration: fallDur, n: 70, size: .7 });
-      scene.add(smokeTrail);
-      const burst = H.fireball(r, { size: .9, duration: 1.4, debris: 15, sparks: 60, ring: false }); burst.position.copy(start); scene.add(burst);
-      const hitPuff = H.explosion({ size: 1.3, color: '#ffb060', smoke: '#444', duration: 1.6 }); hitPuff.position.copy(start); scene.add(hitPuff);
-      const impact = H.fireball(r, { size: 1.3, duration: 2.2, debris: 25, sparks: 70, ring: false }); impact.position.copy(end).setY(.5); scene.add(impact);
-      const splash = H.waterColumn(r, { height: p.splashHeight * .9, radius: .7, duration: 2.6, drops: 120 }); splash.position.copy(end).setY(.25); scene.add(splash);
-      crash = { pl, tHitP, fall, fallDur, fire, smokeTrail, burst, hitPuff, impact, splash };
-    }
-    // ---------- Alarm, Flak und Leuchtspur ----------
+    // ---------- Alarm: sobald das erste Flugzeug im Anflug sichtbar ist, rennen die Matrosen ----------
     const tAlarm = Math.min(...planes.map(q => q.t0)) + 1.0;
-    const flak = [];
-    for (let i = 0; i < p.flak; i++) {
-      const pl = planes[i % planes.length];
-      const t0 = Math.max(tAlarm, pl.t0 + pl.dur * (.2 + r() * .55));
-      if (crash && pl === crash.pl && t0 > crash.tHitP) continue;
-      const f = H.explosion({ size: .7, color: '#9a9a9a', smoke: '#555', duration: 1.4 });
-      pl.curve.getPoint(H.span(t0, pl.t0, pl.t0 + pl.dur), f.position);
-      f.position.add(new THREE.Vector3((r() - .5) * 6, (r() - .5) * 4, (r() - .5) * 6)); scene.add(f); flak.push({ f, t0 });
-    }
-    const tracers = [];
-    for (let i = 0; i < p.tracers; i++) {
-      const ship = ships[i % ships.length];
-      ship.yaw.updateMatrixWorld(true);
-      const from = ship.s.userData.aa[i % ship.s.userData.aa.length].clone().applyMatrix4(ship.yaw.matrixWorld);
-      const pl = planes[(i * 7 + 3) % planes.length];
-      const shots = [];
-      for (let m = 0; m < p.burst; m++) { const sh = H.tracerShot(r() < .5 ? '#ffd27a' : '#ff9a5a', 2.2 + r() * .8); sh.visible = false; scene.add(sh); shots.push({ sh, jit: new THREE.Vector3((r() - .5) * .9, (r() - .5) * .5, (r() - .5) * .9) }); }
-      const flash = H.glowSprite('#ffd080', 1.4); flash.position.copy(from); flash.visible = false; scene.add(flash);
-      tracers.push({ shots, flash, from, pl, scatter: new THREE.Vector3((r() - .5) * 6, (r() - .5) * 3, (r() - .5) * 6), off: r() * .8, period: 1.6 + r() * .8, gap: .09 + r() * .03, aim: new THREE.Vector3(), up: .35 + r() * .4, dir: new THREE.Vector3() });
-    }
-    // ---------- Abschuss-Garbe: zwei Flak-Geschütze der nächsten intakten Schiffe schießen mit Vorhalt auf den Bomber.
-    // Die ersten Geschosse liegen knapp daneben, die letzten treffen genau im Abschussmoment (Trefferfunken am Flugzeug).
-    const killGuns = [], hitSparks = [];
-    if (crash) {
-      const P0 = crash.pl.curve.getPoint(crash.tHitP > 0 ? H.span(crash.tHitP, crash.pl.t0, crash.pl.t0 + crash.pl.dur) : 0);
-      const cand = ships.slice().sort((a, b) => ((a.hit > crash.tHitP ? 0 : 1e4) + a.yaw.position.distanceTo(P0)) - ((b.hit > crash.tHitP ? 0 : 1e4) + b.yaw.position.distanceTo(P0)));
-      for (let g = 0; g < Math.min(2, cand.length); g++) {
-        const ship = cand[g], aa = ship.s.userData.aa;
-        const local = aa.reduce((best, v) => (v.z * Math.sign(P0.z - ship.yaw.position.z) > best.z * Math.sign(P0.z - ship.yaw.position.z) ? v : best), aa[0]).clone();   // Lafette auf der Seite zum Flugzeug
-        const shots = [];
-        for (let k = 0; k < 9; k++) {
-          const sh = H.tracerShot(k % 2 ? '#ffd27a' : '#ff9a5a', 2.4); sh.visible = false; scene.add(sh);
-          const miss = k < 3 ? .12 : .6 + k * .45;                                        // spätere Indizes = frühere Schüsse = weiter daneben
-          const a = r() * 6.283;
-          shots.push({ sh, k, off: new THREE.Vector3(Math.cos(a) * miss, (r() - .3) * miss * .6, Math.sin(a) * miss), arr: crash.tHitP - k * .1 - g * .04 });
-        }
-        const flash = H.glowSprite('#ffd080', 1.5); flash.visible = false; scene.add(flash);
-        killGuns.push({ ship, local, shots, flash, from: new THREE.Vector3(), aim: new THREE.Vector3() });
-      }
-      for (let k = 0; k < 3; k++) {
-        const tA = crash.tHitP - k * .1;
-        const e = H.explosion({ size: .45, color: '#ffcf70', smoke: '#4a4a4a', duration: .7 });
-        crash.pl.curve.getPoint(H.span(tA, crash.pl.t0, crash.pl.t0 + crash.pl.dur), e.position); scene.add(e);
-        hitSparks.push({ e, t0: tA });
-      }
-    }
     // ---------- Ölbrände auf dem Wasser neben getroffenen Schiffen ----------
     const fires = [], slicks = [];
     for (const sh of ships.slice().sort((a, b) => a.hit - b.hit).slice(0, 0)) {
@@ -272,23 +200,11 @@ export default {
         // Flugzeuge
         for (const pl of planes) {
           const u = H.span(t, pl.t0, pl.t0 + pl.dur);
-          const crashing = crash && pl === crash.pl && t > crash.tHitP;
-          if (crashing) {
-            const cu = H.span(t, crash.tHitP, crash.tHitP + crash.fallDur);
-            pl.m.visible = cu < 1;
-            crash.fall.getPoint(cu, pl.m.position); crash.fall.getPoint(Math.min(1, cu + .01), tmp); pl.m.lookAt(tmp); pl.m.rotateZ(cu * cu * 9);
-            crash.fire.userData.at(t - crash.tHitP, cu < 1 ? 1 : 0);
-            crash.smokeTrail.userData.at(t - crash.tHitP);
-            crash.burst.userData.at(t - crash.tHitP); crash.hitPuff.userData.at(t - crash.tHitP + .05);
-            crash.impact.userData.at(t - crash.tHitP - crash.fallDur); crash.splash.userData.at(t - crash.tHitP - crash.fallDur + .05);
-          } else {
-            pl.m.visible = u > 0 && u < 1;
-            pl.curve.getPoint(u, pl.m.position);
-            pl.curve.getPoint(Math.min(1, u + .004), tmp);
-            pl.m.lookAt(tmp);
-            pl.m.rotateZ(pl.bank * Math.sin(u * Math.PI));
-            if (crash && pl === crash.pl) { crash.fire.userData.at(-1); crash.smokeTrail.userData.at(-1); crash.burst.userData.at(-1); crash.hitPuff.userData.at(-1); crash.impact.userData.at(-1); crash.splash.userData.at(-1); }
-          }
+          pl.m.visible = u > 0 && u < 1;
+          pl.curve.getPoint(u, pl.m.position);
+          pl.curve.getPoint(Math.min(1, u + .004), tmp);
+          pl.m.lookAt(tmp);
+          pl.m.rotateZ(pl.bank * Math.sin(u * Math.PI));
           if (pl.torp) {
             const T = pl.torp;
             const fallT = t - T.tDrop;
@@ -369,51 +285,6 @@ export default {
             if (moving) sa.f.userData.walkDist(S, fast ? 1.3 : 1); else sa.f.userData.idle(t);
           }
         }
-        for (const f of flak) f.f.userData.at(t - f.t0);
-        // Flak-Geschütze: Feuerstöße aus mehreren Leuchtspurgeschossen mit Mündungsblitz, leicht gekrümmte Bahn
-        for (const tr of tracers) {
-          const tf = Math.floor((t - tr.off) / tr.period) * tr.period + tr.off;   // Beginn dieses Feuerstoßes
-          const pl = tr.pl, u = H.span(tf, pl.t0, pl.t0 + pl.dur);
-          const alive = !(crash && pl === crash.pl && tf > crash.tHitP);
-          const firing = tf >= tAlarm && u > .08 && u < .92 && alive;
-          tr.flash.visible = false;
-          if (!firing) { for (const s of tr.shots) s.sh.visible = false; continue; }
-          // Salven auf das später getroffene Flugzeug ziehen sich bis zum Treffer zusammen
-          const conv = crash && pl === crash.pl ? Math.min(1, Math.max(0, (crash.tHitP - tf) / 1.2)) : 1;
-          pl.curve.getPoint(H.span(tf + .4, pl.t0, pl.t0 + pl.dur), tr.aim); tr.aim.addScaledVector(tr.scatter, conv);
-          tr.dir.subVectors(tr.aim, tr.from); const dist = tr.dir.length(); tr.dir.divideScalar(dist);
-          tr.dir.y += tr.up; tr.dir.normalize();                                          // Abwehrfeuer geht steil nach oben
-          const maxFly = Math.min(dist * 1.15, 70);
-          tr.shots.forEach((s, m) => {
-            const k = t - tf - m * tr.gap;                                                // Flugzeit dieses Schusses
-            const flown = k * p.tracerSpeed;
-            s.sh.visible = k >= 0 && flown < maxFly;
-            if (k >= 0 && k < .05) tr.flash.visible = true;
-            if (!s.sh.visible) return;
-            tmp2.copy(tr.dir).addScaledVector(s.jit, .04 * (1 - conv * .6)).normalize();
-            s.sh.position.copy(tr.from).addScaledVector(tmp2, flown); s.sh.position.y -= 2.5 * k * k;   // leichte Krümmung
-            tmp.copy(tmp2); tmp.y -= 5 * k / p.tracerSpeed * 10; s.sh.lookAt(tmp.add(s.sh.position));
-          });
-          tr.flash.scale.setScalar(1.0 + .6 * Math.abs(Math.sin(t * 57 + tr.off * 10)));   // deterministisch flackern
-        }
-        for (const kg of killGuns) {
-          kg.ship.yaw.updateMatrixWorld(true);
-          kg.ship.s.localToWorld(kg.from.copy(kg.local));
-          kg.flash.position.copy(kg.from); kg.flash.visible = false;
-          const pl = crash.pl;
-          for (const s of kg.shots) {
-            pl.curve.getPoint(H.span(s.arr, pl.t0, pl.t0 + pl.dur), kg.aim).add(s.off);   // Position des Bombers bei Ankunft (Vorhalt)
-            tmp2.subVectors(kg.aim, kg.from); const dist = tmp2.length(); tmp2.divideScalar(dist);
-            const tFire = s.arr - dist / p.tracerSpeed, fl = t - tFire;
-            const over = s.k < 3 ? 0 : 6;                                                  // Fehlschüsse fliegen weiter
-            s.sh.visible = fl >= 0 && fl * p.tracerSpeed < dist + over;
-            if (fl >= 0 && fl < .05) { kg.flash.visible = true; kg.flash.scale.setScalar(1.1 + .5 * Math.abs(Math.sin(t * 61 + s.k))); }
-            if (!s.sh.visible) continue;
-            s.sh.position.copy(kg.from).addScaledVector(tmp2, fl * p.tracerSpeed);
-            s.sh.lookAt(tmp.copy(s.sh.position).add(tmp2));
-          }
-        }
-        for (const hs of hitSparks) hs.e.userData.at(t - hs.t0);
         fires.forEach((fr, i) => { const a = t - fr.t0; fr.f.userData.at(a); const sl = slicks[i]; if (sl) { sl.visible = a > 0; sl.scale.setScalar(1 + Math.min(3, a) * .6); } });
       }
     };
