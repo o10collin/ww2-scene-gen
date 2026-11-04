@@ -71,7 +71,7 @@ export default {
     const planes = [], bombs = [];
     // Explosion für ein Schiff vormerken (Schiffskoordinaten); Figuren im Radius werden von der Druckwelle umgeworfen
     const addBlast = (ship, worldPos, t, R) => { ship.yaw.updateMatrixWorld(true); const l = ship.yaw.worldToLocal(worldPos.clone()); ship.blasts.push({ t, x: l.x, z: l.z, R }); };
-    const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), tmp3 = new THREE.Vector3();
+    const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), tmp3 = new THREE.Vector3(), qUpright = new THREE.Quaternion();
     // Lage eines Schiffs nach dem Treffer: Rollen (rx), Stampfen (rz), Absinken (y), je nach Untergangsart
     const shipPose = (sh, t, k) => {
       const hu = sh.hit === Infinity ? 0 : H.easeOut(H.span(t, sh.hit + .3, sh.hit + (sh.sinkMode === 'capsize' ? 6.5 : 4.5)));
@@ -103,16 +103,17 @@ export default {
       const t0 = i * (0.9 / p.attackSpeed) + r() * .2, dur = 5.3 / p.attackSpeed;
       let curve;
       if (torpedo) {
-        const rel = new THREE.Vector3(target.x - 4, 2.6, target.z + 17);
+        const rel = new THREE.Vector3(target.x - 9, 2.6, target.z + 10);
         // nach dem Abwurf steil hochziehen und mit Abstand über die Masten des Zielschiffs hinweg
-        const climb = new THREE.Vector3(target.x + 1, 11 + r() * 2, target.z + 2);
-        curve = new THREE.CatmullRomCurve3([new THREE.Vector3(target.x - 50, 7 + r() * 3, target.z + 62), rel, climb, new THREE.Vector3(target.x + 55, 20 + r() * 6, target.z - 50)], false, 'catmullrom', .3);
+        const climb = new THREE.Vector3(target.x + 1, 11 + r() * 2, target.z - 1);
+        curve = new THREE.CatmullRomCurve3([new THREE.Vector3(target.x - 60, 7 + r() * 2, target.z + 13), rel, climb, new THREE.Vector3(target.x + 60, 22 + r() * 4, target.z - 22)], false, 'catmullrom', .3);
         curve.userData = { rel };
       } else {
         const over = new THREE.Vector3(target.x, 6 + r() * 2, target.z);
-        curve = new THREE.CatmullRomCurve3([new THREE.Vector3(-95, 24 + r() * 6, 6 + r() * 30), over, new THREE.Vector3(75, 16 + r() * 8, 62 + r() * 20)], false, 'catmullrom', .3);
+        const lane = (r() - .5) * 4;
+        curve = new THREE.CatmullRomCurve3([new THREE.Vector3(target.x - 90, 22 + r() * 4, target.z + 8 + lane), over, new THREE.Vector3(target.x + 90, 18 + r() * 5, target.z - 8 + lane)], false, 'catmullrom', .3);
       }
-      const pl = { m, curve, t0, dur, torpedo, target, ship, bank: (r() - .5) * .8, bombs: [], torp: null };
+      const pl = { m, curve, t0, dur, torpedo, target, ship, bank: (r() - .5) * .25, bombs: [], torp: null };
       planes.push(pl);
       if (torpedo) {
         // Torpedo: fällt nach dem Abwurf ins Wasser und läuft auf das Schiff zu
@@ -167,6 +168,7 @@ export default {
         }
       }
     }
+    scene.userData.planes = planes;
     for (const sh of ships) { const x = Math.max(-sh.len * .4, Math.min(sh.len * .4, sh.hitX)); sh.fires[0].fb.position.x = x; sh.fires[1].fb.position.x = x + (x < 0 ? 2.6 : -2.6); sh.smoke.position.x = x; }
     // ---------- Alarm: sobald das erste Flugzeug im Anflug sichtbar ist, rennen die Matrosen ----------
     const tAlarm = Math.min(...planes.map(q => q.t0)) + 1.0;
@@ -248,6 +250,8 @@ export default {
             sh.tFall = Infinity;
             if (sh.hit !== Infinity) for (let tt = sh.hit; tt < sh.hit + 8; tt += .02) { const q = shipPose(sh, tt, p.listing); if (Math.max(Math.abs(q.rx), Math.abs(q.rz)) > .17) { sh.tFall = tt; break; } }
           }
+          qUpright.copy(sh.s.quaternion).invert();                                        // Rauch und Flammen steigen immer senkrecht auf
+          sh.smoke.quaternion.copy(qUpright); for (const fl of sh.fires) fl.fb.quaternion.copy(qUpright);
           sh.smoke.visible = t > sh.hit + .5; if (sh.smoke.visible) sh.smoke.userData.at(t - sh.hit - .5, .5);
           for (const fl of sh.fires) {
             const near = 1 - Math.min(1, Math.abs(fl.fb.position.x - sh.hitX) / (sh.len * .5)) * .6;   // nahe am Treffer größer

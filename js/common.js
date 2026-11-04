@@ -150,7 +150,10 @@ export const MODEL_GROUPS = {
 };
 MODEL_GROUPS.human = MODEL_GROUPS.civil;
 export const MODEL_FILES = {};
-for (const names of Object.values(MODEL_GROUPS)) for (const n of names) MODEL_FILES[n] = { url: MX + n + '.glb' + SUF, height: n === 'soldier' ? 1.78 : 1.72, forward: 0 };
+for (const names of Object.values(MODEL_GROUPS)) for (const n of names) {
+  MODEL_FILES[n] = { url: MX + n + '.glb' + SUF, height: n === 'soldier' ? 1.78 : 1.72, forward: 0 };
+  MODEL_FILES[n + '_lp'] = { url: MX.replace(/mixamo\/$/, 'mixamo-lp/') + n + '.glb' + SUF, height: n === 'soldier' ? 1.78 : 1.72, forward: 0, lowPoly: true };   // vereinfachte Fassung (~2000 Dreiecke)
+}
 export const CLIP_NAMES = ['Standing_Idle_Loop', 'Standing_Idle', 'Walking', 'Running_Fast', 'Jogging', 'Looking_Around', 'Thinking_While_Standing', 'Waving_With_Both_Hands',
   'Rifle_Idle', 'Rifle_Walk_Forward', 'Rifle_Run_Forward', 'Rifle_Walking_Crouched', 'Rifle_Aiming_And_Kneeling', 'Formal_Military_Salute', 'Pointing_Onward_Charge', 'Crouch_Idle',
   'Male_Writing_While_Seated', 'Male_Talking_While_Seated', 'Sitting_And_Talking_To_Another_Person', 'Clap_While_Seated', 'Sitting_Cross_Legged', 'Sitting_On_The_Floor', 'Banging_Fist_On_Table',
@@ -184,6 +187,15 @@ export async function preloadModels(onProgress) {
     if (MODELS[key]) continue;
     jobs.push(loader.loadAsync(def.url).then(gltf => {
       const root = gltf.scene;
+      if (def.lowPoly) root.traverse(o => {                                           // flache Normalen und Facetten-Helligkeit
+        if (!o.isMesh) return;
+        let g = o.geometry; if (g.index) g = g.toNonIndexed();
+        g.computeVertexNormals();
+        const n = g.attributes.position.count, c = new Float32Array(n * 3);
+        for (let f = 0; f < n; f += 3) { const x = Math.sin((f / 3 + 1) * 12.9898) * 43758.5453, b = .72 + .28 * (x - Math.floor(x)); for (let v = 0; v < 9; v++) c[f * 3 + v] = b; }
+        g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+        o.geometry = g;
+      });
       root.updateMatrixWorld(true);
       const box3 = new THREE.Box3().setFromObject(root);
       const h = Math.max(.01, box3.max.y - box3.min.y);
@@ -300,13 +312,13 @@ export function figure({ color = P.grey, head = P.skin, helmet = null, scale = 1
   const groupKey = model === 'auto' ? (helmet ? 'soldier' : 'civil') : model;
   const names = MODEL_GROUPS[groupKey] || [groupKey];
   const n = seed || FIGURES.size + 1;
-  const key = names[n % names.length];
+  const key = lowPoly && MODELS[names[n % names.length] + '_lp'] ? names[n % names.length] + '_lp' : names[n % names.length];
   const dummyL = new THREE.Object3D(), dummyR = new THREE.Object3D();
   if (figureMode === 'glb' && MODELS[key]) {
     const M = MODELS[key];
     const inst = SkeletonUtils.clone(M.scene);
     inst.traverse(o => {
-      if (o.isMesh) { o.material = gm || mat(color); o.castShadow = true; o.receiveShadow = false; o.frustumCulled = false; }
+      if (o.isMesh) { o.material = gm || mat(color); if (M.def.lowPoly) o.material.vertexColors = true; o.castShadow = true; o.receiveShadow = false; o.frustumCulled = false; }
     });
     const wrap = new THREE.Group();
     wrap.add(inst);
@@ -1148,7 +1160,7 @@ export function explosionLP({ color = P.orange, smoke = P.darkGrey, size = 1, du
   const puffs = [];
   for (let i = 0; i < 6; i++) {
     const m = lpMesh(lpGeometry('ico', 10 + i, { detail: 0 }), lpSmokeMat(smoke)); g.add(m);
-    const a = r() * 6.283, e = (r() - .3) * 1.2;
+    const a = r() * 6.283, e = r() * 1.1;                                              // nur aufwärts: Rauch steigt immer
     puffs.push({ m, d: new THREE.Vector3(Math.cos(a) * Math.cos(e), Math.sin(e) + .3, Math.sin(a) * Math.cos(e)), k: .35 + r() * .35, rot: [r() * 6, r() * 6, r() * 6] });
   }
   const fc = new THREE.Color(color);

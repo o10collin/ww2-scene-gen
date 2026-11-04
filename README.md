@@ -87,8 +87,10 @@ Abdunkeln 0 und Bloom 0 wieder erreichbar.
 „Global → Bild → Low-Poly-Look“ (Standard: an) stellt alles auf einen facettierten Stil um: Kugeln werden zu Ikosaedern,
 Zylinder und Kegel bekommen weniger Kanten, alle Flächen werden flach schattiert, das Wasser wird zu einer groben,
 facettierten Wellenfläche, und Feuer, Explosionen, Rauch und Wassersäulen bestehen aus kantigen Brocken und Splittern.
-Ausgeschaltet kommen die runden Formen und die weichen Partikeleffekte zurück. Die Mixamo-Figuren bleiben in beiden Fällen
-glatt, da sie als leuchtende Silhouetten gerendert werden.
+Auch die Figuren werden kantig: Dafür liegen in `assets/models/mixamo-lp/` mit meshoptimizer vereinfachte Fassungen der
+Mixamo-Charaktere (rund 2000 statt bis zu 59000 Dreiecke, Skelett und Animationen bleiben erhalten), deren Facetten eine
+eigene Helligkeit bekommen. Ausgeschaltet kommen die runden Formen, die detaillierten Figuren und die weichen Partikeleffekte
+zurück.
 
 ## Figuren
 

@@ -10,6 +10,9 @@ Lizenz: Mixamo-Nutzungsbedingungen von Adobe. Charaktere und Animationen dürfen
 oder weiterverbreitet werden. Für eine Veröffentlichung des Repos solltest du diesen Ordner also nicht mit ausliefern,
 für das fertige Video ist die Nutzung unproblematisch.
 
+## `mixamo-lp/` – vereinfachte Charaktere
+Dieselben Mixamo-Charaktere, mit meshoptimizer auf rund 2000 Dreiecke vereinfacht (für den Low-Poly-Look). Gleiche Lizenz.
+
 ## `anim/` – Animationsclips
 Mixamo-Animationen als reine Skelett-GLBs (Idle, Walking, Running, Rifle-Varianten, Sitzen, Schreiben, Jubeln, Heben,
 Tragen, Schaufeln, Sterben, Knien, Beten, Weinen, Salutieren …). Gleiche Lizenz wie oben. Beim Laden werden die Spuren
