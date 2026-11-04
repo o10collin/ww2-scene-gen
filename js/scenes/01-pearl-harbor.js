@@ -19,11 +19,11 @@ export default {
     splashHeight: { type: 'number', min: 3, max: 20, step: .5, value: 7, label: 'Höhe Wassersäulen' },
     fireSize: { type: 'number', min: .3, max: 3, step: .1, value: .9, label: 'Brände auf den Schiffen' },
     sailorsPer: { type: 'number', min: 0, max: 6, step: 1, value: 2, label: 'Matrosen je Schiff' },
-    bombColor: { type: 'color', value: '#ffd23a', label: 'Bomben und Torpedos' },
+    weaponColor: { type: 'color', value: '#ff8a1e', label: 'Bomben und Torpedos' },
     skyColor: { type: 'color', value: '#101722', label: 'Himmel' },
     waterColor: { type: 'color', value: '#1c2d3e', label: 'Wasser' },
     details: { type: 'boolean', value: true, label: 'Hafendetails (Piers, Kräne, Hangars)' },
-    ...H.cameraParams([-20, 7, 24], [-10, 6, 17], [2, 1, -2], 38)
+    ...H.cameraParams([-22, 7.5, 27], [-13, 6.5, 21], [2, 2.6, -2], 38)
   },
   build({ scene, params: p, rng: r, shadows }) {
     H.sky(scene, p.skyColor, 50, 140);
@@ -125,12 +125,12 @@ export default {
         curve.userData = { rel };
       } else {
         // Sturzkampfbomber: hoch anfliegen, steil auf das Ziel herabstoßen, kurz davor ausklinken, abfangen und steigen
-        const lane = (r() - .5) * 3;
+        const lane = (r() - .5) * 2;                                                    // parallel zur Schiffsreihe, nicht auf die Kamera zu
         curve = new THREE.CatmullRomCurve3([
-          new THREE.Vector3(target.x - 70, 30 + r() * 4, target.z + 6 + lane),
-          new THREE.Vector3(target.x - 16, 17 + r() * 2, target.z + 2 + lane * .5),
-          new THREE.Vector3(target.x + 7, 7 + r(), target.z + lane * .2),
-          new THREE.Vector3(target.x + 70, 24 + r() * 4, target.z - 8 + lane)], false, 'catmullrom', .3);
+          new THREE.Vector3(target.x - 70, 22 + r() * 3, target.z - 1 + lane),
+          new THREE.Vector3(target.x - 15, 12.5 + r(), target.z + lane * .5),
+          new THREE.Vector3(target.x + 8, 7 + r() * .5, target.z),
+          new THREE.Vector3(target.x + 70, 20 + r() * 3, target.z - 2 + lane)], false, 'catmullrom', .3);
       }
       const pl = { m, curve, t0, dur, torpedo, target, ship, bank: (r() - .5) * .25, bombs: [], torp: null };
       planes.push(pl);
@@ -146,7 +146,7 @@ export default {
         const run = splashPos.distanceTo(end), tHit = tSplash + run / 11;
         if (tHit < ship.hit) { ship.hit = tHit; ship.hitX = 0; ship.hitSide = 1; ship.sinkMode = ship.sinkMode === 'stern' ? 'list' : 'capsize'; }
         addBlast(ship, end, tHit, 1.4 + p.explosionSize);
-        const torp = H.cyl(.17, .17, 2.3, H.glowMat(p.bombColor, 1.25), 8); torp.rotation.x = Math.PI / 2; torp.castShadow = false;   // leuchtet wie die Bomben
+        const torp = H.cyl(.17, .17, 2.3, H.glowMat(p.weaponColor, 1.25), 8); torp.rotation.x = Math.PI / 2; torp.castShadow = false;   // leuchtet wie die Bomben
         const torpG = new THREE.Group(); torpG.add(torp); torpG.visible = false; scene.add(torpG);
         const wake = new THREE.Mesh(new THREE.BoxGeometry(.45, .04, 1), new THREE.MeshBasicMaterial({ color: '#e6eef5', transparent: true, opacity: .5, depthWrite: false })); wake.visible = false; scene.add(wake);
         const entry = H.waterColumn(r, { height: 2.5, radius: .35, duration: 1.4, drops: 40 }); entry.position.copy(splashPos); scene.add(entry);
@@ -156,13 +156,13 @@ export default {
       } else {
         // Bomben: werden mit der Fluggeschwindigkeit ausgeklinkt und fallen ballistisch. Abwurfpunkt so gewählt,
         // dass die erste Bombe das Ziel trifft; weitere Bomben fallen in kurzem Abstand dahinter ins Wasser.
-        // Abwurf im Sturzflug auf etwa 15 m Höhe. Die Bombe übernimmt Tempo und Richtung des Flugzeugs; die ganze
+        // Abwurf im Sturzflug auf etwa 10 m Höhe. Die Bombe übernimmt Tempo und Richtung des Flugzeugs; die ganze
         // Flugbahn wird so verschoben, dass ihre natürliche Landestelle genau auf dem Zielschiff liegt.
         let best = .4, bestE = 1e9;
         for (let u = .15; u <= .6; u += .0025) {
           curve.getPointAt(u, tmp); velAt(curve, u, dur, tmp2);
           if (tmp2.y >= 0) continue;                                                      // nur im Sinkflug
-          const e = Math.abs(tmp.y - 15); if (e < bestE) { bestE = e; best = u; }
+          const e = Math.abs(tmp.y - 10.5); if (e < bestE) { bestE = e; best = u; }   // Abwurf auf ~10 m: auch bei nahen Schiffen im Bild
         }
         for (let pass = 0; pass < 2; pass++) {
           const rp = curve.getPointAt(best).sub(new THREE.Vector3(0, .35, 0)), rv = velAt(curve, best, dur, new THREE.Vector3());
@@ -181,7 +181,7 @@ export default {
           const hitShip = shipAt(land.x, land.z);                                        // auch ein Nachbarschiff kann getroffen werden
           const onShip = !!hitShip;
           if (!onShip) { const tw = fallTime(rel, v, .25); land = new THREE.Vector3(rel.x + v.x * tw, .25, rel.z + v.z * tw); tHitB = tDrop + tw; }   // Fehlwurf fällt bis aufs Wasser
-          const model = H.bomb(2.1, H.glowMat(p.bombColor, 1.25), .21); model.visible = false; scene.add(model);
+          const model = H.bomb(2.1, H.glowMat(p.weaponColor, 1.25), .21); model.visible = false; scene.add(model);
           let boom = null, splash = null;
           if (onShip) {
             boom = H.fireball(r, { size: p.explosionSize, duration: 3.0, debris: p.debris, sparks: 60 }); boom.position.copy(land).setY(1.4); scene.add(boom);
