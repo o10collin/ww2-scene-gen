@@ -65,10 +65,12 @@ export default {
       const smoke = H.smokeColumn(r, { color: '#1c1c20', height: 11, n: 8, width: .7 }); smoke.position.set(0, 2, 0); smoke.visible = false; s.add(smoke);
       // Untergangsart: Torpedotreffer kentern zur Trefferseite, Bombentreffer sacken über Heck oder Bug weg oder krängen
       const sinkMode = kind === 'destroyer' ? (r() < .5 ? 'stern' : 'list') : (r() < .5 ? 'capsize' : 'list');
-      ships.push({ s, yaw, len, hit: Infinity, hitX: 0, hitSide: 1, sinkMode, sinkDir: r() < .5 ? 1 : -1, sailors, fires, smoke });
+      ships.push({ s, yaw, len, hit: Infinity, hitX: 0, hitSide: 1, sinkMode, sinkDir: r() < .5 ? 1 : -1, sailors, fires, smoke, blasts: [] });
     }
     // ---------- Flugzeuge: fliegen von außerhalb des Bildes über das Ziel und wieder hinaus ----------
     const planes = [], bombs = [];
+    // Explosion für ein Schiff vormerken (Schiffskoordinaten); Figuren im Radius werden von der Druckwelle umgeworfen
+    const addBlast = (ship, worldPos, t, R) => { ship.yaw.updateMatrixWorld(true); const l = ship.yaw.worldToLocal(worldPos.clone()); ship.blasts.push({ t, x: l.x, z: l.z, R }); };
     const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), tmp3 = new THREE.Vector3();
     // Lage eines Schiffs nach dem Treffer: Rollen (rx), Stampfen (rz), Absinken (y), je nach Untergangsart
     const shipPose = (sh, t, k) => {
@@ -123,6 +125,7 @@ export default {
         const end = new THREE.Vector3(target.x, .1, target.z + 1.2);
         const run = splashPos.distanceTo(end), tHit = tSplash + run / 11;
         if (tHit < ship.hit) { ship.hit = tHit; ship.hitX = 0; ship.hitSide = 1; ship.sinkMode = ship.sinkMode === 'stern' ? 'list' : 'capsize'; }
+        addBlast(ship, end, tHit, 1.4 + p.explosionSize);
         const torp = H.cyl(.13, .13, 1.9, '#3a3f46', 10); torp.rotation.x = Math.PI / 2; torp.castShadow = false;
         const torpG = new THREE.Group(); torpG.add(torp); torpG.visible = false; scene.add(torpG);
         const wake = new THREE.Mesh(new THREE.BoxGeometry(.3, .04, 1), new THREE.MeshBasicMaterial({ color: '#dfe9f2', transparent: true, opacity: .3, depthWrite: false })); wake.visible = false; scene.add(wake);
@@ -153,9 +156,11 @@ export default {
           if (onShip) {
             boom = H.fireball(r, { size: p.explosionSize, duration: 3.0, debris: p.debris, sparks: 60 }); boom.position.copy(land).setY(1.4); scene.add(boom);
             if (tHit < ship.hit) { ship.hit = tHit; ship.hitX = land.x - target.x; ship.hitSide = land.z > target.z ? 1 : -1; }
+            addBlast(ship, land, tHit, 1.6 + p.explosionSize);
           } else {
             splash = H.waterColumn(r, { height: p.splashHeight * (.8 + r() * .5), radius: .55 + r() * .3, duration: 2.8, drops: 140 }); splash.position.copy(land).setY(.25); scene.add(splash);
             boom = H.fireball(r, { size: p.explosionSize * .45, duration: 1.2, debris: 0, sparks: 30, ring: false }); boom.position.copy(land).setY(.4); scene.add(boom);
+            addBlast(ship, land, tHit, .8 + p.explosionSize * .4);                  // Nahtreffer im Wasser: kleiner Radius
           }
           const b = { model, rel, v, tDrop, tHit, boom, splash, pl };
           bombs.push(b); pl.bombs.push(b);
@@ -253,15 +258,27 @@ export default {
           const tA = Math.min(tAlarm + .6, sh.hit - .6);
           const roll = sh.s.rotation.x, B2 = sh.s.userData.beam * .5, deckY = sh.s.userData.deckY;
           for (const sa of sh.sailors) {
-            const tF = sh.tFall + sa.fallDelay;
+            if (sa.tKnock === undefined) {                                                 // erste Explosion in Reichweite (deterministisch)
+              sa.tKnock = Infinity;
+              for (const b of sh.blasts) {
+                if (b.t >= sa.tKnock) continue;
+                const w = sailorWalk(sa, b.t, tA);
+                if (Math.hypot(w.x - b.x, sa.lane.z - b.z) < b.R) { sa.tKnock = b.t; sa.knockX = b.x; }
+              }
+            }
+            const knocked = sa.tKnock + .03 < sh.tFall + sa.fallDelay;
+            const tF = knocked ? sa.tKnock + .03 : sh.tFall + sa.fallDelay;
             if (t > tF) {
-              // Sturz entlang des Laufwegs (zur Wegmitte, weg von Türmen und Davits), danach rutschen mit der Schlagseite:
-              // auf der tiefen Seite über Bord, auf der hohen Seite bis an den Aufbau
-              const fx = sailorWalk(sa, tF, tA).x, fdir = Math.sign((sa.lane.x0 + sa.lane.x1) / 2 - fx) || 1;   // deterministisch aus dem Sturzzeitpunkt
+              // Sturz entlang des Laufwegs: von der Druckwelle weg, sonst zur Wegmitte (weg von Türmen und Davits).
+              // Danach liegen bleiben und mit der Schlagseite rutschen: tiefe Seite über Bord, hohe Seite bis an den Aufbau
+              const fx0 = sailorWalk(sa, tF, tA).x;
+              let fdir = knocked ? (Math.sign(fx0 - sa.knockX) || 1) : (Math.sign((sa.lane.x0 + sa.lane.x1) / 2 - fx0) || 1);
+              if (fx0 + fdir * .9 > sa.lane.x1 || fx0 + fdir * .9 < sa.lane.x0) fdir = -fdir;   // kein Sturz in Türme oder Davits
               const f = t - tF;
-              sa.f.position.x = fx;
+              const throwX = knocked ? fdir * .45 * H.easeOut(Math.min(1, f / .3)) : 0;        // von der Druckwelle weggeschleudert
+              sa.f.position.x = fx0 + throwX;
               sa.f.rotation.y = fdir > 0 ? 0 : Math.PI;
-              sa.f.userData.pose('Dying_Falling_Forward', f);
+              sa.f.userData.pose('Dying_Falling_Forward', f + (knocked ? .35 : 0));        // Druckwelle: Stolperphase überspringen
               const low = Math.sign(roll) || 1, side = Math.sign(sa.lane.z) || 1;
               const acc = 2.2 * Math.max(0, Math.abs(Math.sin(roll)) - .15), sl = .5 * acc * Math.max(0, f - .7) ** 2;
               let z = sa.lane.z, y = deckY;
