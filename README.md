@@ -82,6 +82,14 @@ roten Flächen für gegnerisches Gebiet, gesperrten Ländernamen und leuchtenden
 „Global → Bild / Look / Text“ einstellbar, der frühere helle Comic-Look ist über Shading „toon“,
 Abdunkeln 0 und Bloom 0 wieder erreichbar.
 
+## Low-Poly-Look
+
+„Global → Bild → Low-Poly-Look“ (Standard: an) stellt alles auf einen facettierten Stil um: Kugeln werden zu Ikosaedern,
+Zylinder und Kegel bekommen weniger Kanten, alle Flächen werden flach schattiert, das Wasser wird zu einer groben,
+facettierten Wellenfläche, und Feuer, Explosionen, Rauch und Wassersäulen bestehen aus kantigen Brocken und Splittern.
+Ausgeschaltet kommen die runden Formen und die weichen Partikeleffekte zurück. Die Mixamo-Figuren bleiben in beiden Fällen
+glatt, da sie als leuchtende Silhouetten gerendert werden.
+
 ## Figuren
 
 Die Figuren sind realistisch proportionierte, geriggte Mixamo-Charaktere (`assets/models/mixamo/`: Remy, Megan,
@@ -139,7 +147,7 @@ bildgenau reproduzierbar bleibt.
 `js/common.js` enthält die Bausteine: Figuren, Panzer, Flugzeuge, Schiffe, Landungsboote, Gebäude,
 Ruinen, Städte, Bäume, Wolken, Pfeile, Europakarte (`europeMap`), Globus mit Bögen (`globe`),
 Explosionen (`explosion` klein, `fireball` groß), Dauerbrände (`flame`), Wassersäulen (`waterColumn`) und Rauchsäulen
-(`smokeColumn`) als Sprite-Partikelsysteme (`emitter`: weiche prozedurale Rauch-, Feuer- und Gischttexturen auf hunderten
-Billboards, Bewegung, Wachstum, Farbverlauf und Ausblenden laufen im Shader aus dem Alter, daher bildgenau reproduzierbar),
+(`smokeColumn`). Im Low-Poly-Look sind das kantige, verformte Polyeder mit eigener Helligkeit je Facette (`fireballLP` usw.),
+sonst weiche Sprite-Partikelsysteme (`emitter`, `fireballSoft` usw.). Beide laufen deterministisch aus dem Alter,
 Partikel (Schnee, Staub, Sterne), Flaggen, Tisch und Dokument mit
 Unterschrift, Wasser mit Wellen sowie Easing-Funktionen.

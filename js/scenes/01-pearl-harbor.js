@@ -62,7 +62,7 @@ export default {
         fb.position.set(0, s.userData.deckY + .25, (r() - .5) * .6); fb.visible = false; s.add(fb);
         fires.push({ fb, off: k * .9 + r() * .3, k: 1 });
       }
-      const smoke = H.smokeColumn(r, { color: '#1c1c20', height: 11, n: 8, width: .7 }); smoke.position.set(0, 2, 0); smoke.visible = false; s.add(smoke);
+      const smoke = H.smokeColumn(r, { color: '#48474d', height: 11, n: 8, width: .7 }); smoke.position.set(0, 2, 0); smoke.visible = false; s.add(smoke);
       // Untergangsart: Torpedotreffer kentern zur Trefferseite, Bombentreffer sacken über Heck oder Bug weg oder krängen
       const sinkMode = kind === 'destroyer' ? (r() < .5 ? 'stern' : 'list') : (r() < .5 ? 'capsize' : 'list');
       ships.push({ s, yaw, len, hit: Infinity, hitX: 0, hitSide: 1, sinkMode, sinkDir: r() < .5 ? 1 : -1, sailors, fires, smoke, blasts: [] });

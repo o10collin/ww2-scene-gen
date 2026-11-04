@@ -39,8 +39,8 @@ export default {
     const blds = city.children.map(b => ({ b, d: Math.hypot(b.position.x, b.position.z), ang: Math.atan2(b.position.z, b.position.x) }));
     const bomber = H.faceZ(H.aircraft(H.glowMat(H.ROLE.west, 1.6), { span: 7.5, length: 5.5, engines: 4 })); bomber.rotation.y = Math.PI / 2; scene.add(bomber);
     const bomb = H.cyl(.35, .35, 1.6, '#3a3d44', 10); bomb.castShadow = false; scene.add(bomb);
-    const fireball = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), new THREE.MeshBasicMaterial({ color: p.fireColor })); fireball.visible = false; scene.add(fireball);
-    const cloudMat = new THREE.MeshBasicMaterial({ color: p.cloudColor });  // flach, ohne Schattierung (Papier-Look)
+    const fireball = H.mesh(H.isLowPoly() ? new THREE.IcosahedronGeometry(1, 1) : new THREE.SphereGeometry(1, 20, 14), new THREE.MeshBasicMaterial({ color: p.fireColor, vertexColors: H.isLowPoly() })); fireball.castShadow = fireball.receiveShadow = false; fireball.visible = false; scene.add(fireball);
+    const cloudMat = new THREE.MeshBasicMaterial({ color: p.cloudColor, vertexColors: H.isLowPoly() });  // flach, ohne Schattierung (Papier-Look), im Low-Poly-Look mit Facetten-Helligkeit
     const stem = H.cyl(1, 1.6, 1, cloudMat, 20); stem.castShadow = stem.receiveShadow = false; stem.visible = false; scene.add(stem);
     const cap = new THREE.Group();
     for (let i = 0; i < 10; i++) { const s = H.sphere(1, cloudMat, 14); s.castShadow = s.receiveShadow = false; s.position.set(Math.cos(i / 10 * 6.28) * 1.1, (r() - .5) * .5, Math.sin(i / 10 * 6.28) * 1.1); s.scale.setScalar(.9 + r() * .4); cap.add(s); }
