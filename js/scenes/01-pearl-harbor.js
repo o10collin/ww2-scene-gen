@@ -155,13 +155,20 @@ export default {
       } else {
         // Bomben: werden mit der Fluggeschwindigkeit ausgeklinkt und fallen ballistisch. Abwurfpunkt so gewählt,
         // dass die erste Bombe das Ziel trifft; weitere Bomben fallen in kurzem Abstand dahinter ins Wasser.
-        let best = .25, bestD = 1e9;
-        for (let u = .1; u <= .6; u += .0025) {
+        // Abwurf im Sturzflug auf etwa 15 m Höhe. Die Bombe übernimmt Tempo und Richtung des Flugzeugs; die ganze
+        // Flugbahn wird so verschoben, dass ihre natürliche Landestelle genau auf dem Zielschiff liegt.
+        let best = .4, bestE = 1e9;
+        for (let u = .15; u <= .6; u += .0025) {
           curve.getPointAt(u, tmp); velAt(curve, u, dur, tmp2);
-          if (tmp.y > 19 || tmp.x < target.x - 22 || tmp.x > target.x) continue;       // nur im Sturzflug kurz vor dem Ziel ausklinken
-          const tf = fallTime(tmp, tmp2, 1.2);
-          const d = Math.hypot(tmp.x + tmp2.x * tf - target.x, tmp.z + tmp2.z * tf - target.z);
-          if (d < bestD) { bestD = d; best = u; }
+          if (tmp2.y >= 0) continue;                                                      // nur im Sinkflug
+          const e = Math.abs(tmp.y - 15); if (e < bestE) { bestE = e; best = u; }
+        }
+        for (let pass = 0; pass < 2; pass++) {
+          const rp = curve.getPointAt(best).sub(new THREE.Vector3(0, .35, 0)), rv = velAt(curve, best, dur, new THREE.Vector3());
+          const tf = fallTime(rp, rv, 1.2);
+          const off = new THREE.Vector3(target.x - (rp.x + rv.x * tf), 0, target.z - (rp.z + rv.z * tf));
+          for (const q of curve.points) q.add(off);
+          curve.updateArcLengths();
         }
         for (let k = 0; k < 1; k++) {                                                // eine Bombe pro Flieger
           const u = best + k * (.09 / dur) * p.attackSpeed;          // nächste Bombe ~0,09 s später
@@ -185,7 +192,7 @@ export default {
             boom = H.fireball(r, { size: p.explosionSize * .45, duration: 1.2, debris: 0, sparks: 30, ring: false }); boom.position.copy(land).setY(.4); scene.add(boom);
             addBlast(ship, land, tHitB, .8 + p.explosionSize * .4);                 // Nahtreffer im Wasser: kleiner Radius
           }
-          const b = { model, rel, v, tDrop, tHit: tHitB, boom, splash, pl };
+          const b = { model, rel, v, vPlane: velAt(curve, u, dur, new THREE.Vector3()), uDrop: u, tDrop, tHit: tHitB, boom, splash, pl };
           bombs.push(b); pl.bombs.push(b);
         }
       }
