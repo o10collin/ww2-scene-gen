@@ -93,53 +93,62 @@ export default {
       if (sa.flip) { x = -x; dir = -dir; }
       return { x: mid + x, dir, moving, S, fast };
     };
-    const velAt = (curve, u, dur, out) => { curve.getPoint(Math.min(1, u + .002), out); curve.getPoint(Math.max(0, u - .002), tmp3); return out.sub(tmp3).divideScalar(.004 * dur); };
+    const velAt = (curve, u, dur, out) => { curve.getPointAt(Math.min(1, u + .002), out); curve.getPointAt(Math.max(0, u - .002), tmp3); return out.sub(tmp3).divideScalar(.004 * dur); };
+    // Torpedos nur auf Schiffe der vorderen Reihe (sonst müsste der Flieger tief durch die vordere Reihe), von rechts her
+    const front = ships.map((sh, k) => k).filter(k => k % 2 === 1).reverse();
     for (let i = 0; i < p.planes; i++) {
-      const ship = ships[i % ships.length];
+      const torpedo = i >= p.planes - p.torpedoPlanes;                             // erst die Bomber, danach die Torpedoflieger
+      const kT = i - (p.planes - p.torpedoPlanes);
+      const order = [2, 4, 0, 3, 1, 5];                                              // erster Angriff aufs mittlere Schiff, dann abwechselnd
+      const ship = torpedo && front.length ? ships[front[kT % front.length]] : ships[order[i % order.length] % ships.length];
       const target = ship.yaw.position.clone();
-      const torpedo = i < p.torpedoPlanes;
       const m = H.faceZ(H.aircraft(H.glowMat(H.ROLE.axis)));
       m.visible = false; scene.add(m);
-      const t0 = i * (0.9 / p.attackSpeed) + r() * .2, dur = 5.3 / p.attackSpeed;
+      const t0 = i * (0.8 / p.attackSpeed) + r() * .2, dur = (torpedo ? 5.3 : 5.8) / p.attackSpeed;
       let curve;
       if (torpedo) {
-        const rel = new THREE.Vector3(target.x - 9, 2.6, target.z + 10);
-        // nach dem Abwurf steil hochziehen und mit Abstand über die Masten des Zielschiffs hinweg
-        const climb = new THREE.Vector3(target.x + 1, 11 + r() * 2, target.z - 1);
-        curve = new THREE.CatmullRomCurve3([new THREE.Vector3(target.x - 60, 7 + r() * 2, target.z + 13), rel, climb, new THREE.Vector3(target.x + 60, 22 + r() * 4, target.z - 22)], false, 'catmullrom', .3);
+        const rel = new THREE.Vector3(target.x - 10, 3.2, target.z + 9);
+        // flacher Anflug, nach dem Abwurf sanft hochziehen und mit Abstand über die Masten des Zielschiffs hinweg
+        const climb = new THREE.Vector3(target.x + 7, 9 + r() * 1.5, target.z - 3);
+        curve = new THREE.CatmullRomCurve3([new THREE.Vector3(target.x - 60, 5.5 + r(), target.z + 14), rel, climb, new THREE.Vector3(target.x + 60, 17 + r() * 3, target.z - 20)], false, 'catmullrom', .3);
         curve.userData = { rel };
       } else {
-        const over = new THREE.Vector3(target.x, 6 + r() * 2, target.z);
-        const lane = (r() - .5) * 4;
-        curve = new THREE.CatmullRomCurve3([new THREE.Vector3(target.x - 90, 22 + r() * 4, target.z + 8 + lane), over, new THREE.Vector3(target.x + 90, 18 + r() * 5, target.z - 8 + lane)], false, 'catmullrom', .3);
+        // Sturzkampfbomber: hoch anfliegen, steil auf das Ziel herabstoßen, kurz davor ausklinken, abfangen und steigen
+        const lane = (r() - .5) * 3;
+        curve = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(target.x - 70, 30 + r() * 4, target.z + 6 + lane),
+          new THREE.Vector3(target.x - 16, 17 + r() * 2, target.z + 2 + lane * .5),
+          new THREE.Vector3(target.x + 7, 7 + r(), target.z + lane * .2),
+          new THREE.Vector3(target.x + 70, 24 + r() * 4, target.z - 8 + lane)], false, 'catmullrom', .3);
       }
       const pl = { m, curve, t0, dur, torpedo, target, ship, bank: (r() - .5) * .25, bombs: [], torp: null };
       planes.push(pl);
       if (torpedo) {
         // Torpedo: fällt nach dem Abwurf ins Wasser und läuft auf das Schiff zu
         let uDrop = .3, best = 1e9;                                                    // Kurvenparameter am Abwurfpunkt
-        for (let u = 0; u <= 1; u += .002) { const d = curve.getPoint(u).distanceTo(curve.userData.rel); if (d < best) { best = d; uDrop = u; } }
+        for (let u = 0; u <= 1; u += .002) { const d = curve.getPointAt(u).distanceTo(curve.userData.rel); if (d < best) { best = d; uDrop = u; } }
         const tDrop = t0 + dur * uDrop;
-        const rel = curve.getPoint(uDrop), v = velAt(curve, uDrop, dur, new THREE.Vector3());
+        const rel = curve.getPointAt(uDrop), v = velAt(curve, uDrop, dur, new THREE.Vector3());
         const tSplash = tDrop + Math.sqrt(2 * (rel.y - .2) / G);
         const splashPos = new THREE.Vector3(rel.x + v.x * (tSplash - tDrop), .2, rel.z + v.z * (tSplash - tDrop));
         const end = new THREE.Vector3(target.x, .1, target.z + 1.2);
         const run = splashPos.distanceTo(end), tHit = tSplash + run / 11;
         if (tHit < ship.hit) { ship.hit = tHit; ship.hitX = 0; ship.hitSide = 1; ship.sinkMode = ship.sinkMode === 'stern' ? 'list' : 'capsize'; }
         addBlast(ship, end, tHit, 1.4 + p.explosionSize);
-        const torp = H.cyl(.13, .13, 1.9, '#3a3f46', 10); torp.rotation.x = Math.PI / 2; torp.castShadow = false;
+        const torp = H.cyl(.17, .17, 2.3, H.glowMat(H.ROLE.axis, 1.2), 8); torp.rotation.x = Math.PI / 2; torp.castShadow = false;   // leuchtet wie die Bomben
         const torpG = new THREE.Group(); torpG.add(torp); torpG.visible = false; scene.add(torpG);
-        const wake = new THREE.Mesh(new THREE.BoxGeometry(.3, .04, 1), new THREE.MeshBasicMaterial({ color: '#dfe9f2', transparent: true, opacity: .3, depthWrite: false })); wake.visible = false; scene.add(wake);
+        const wake = new THREE.Mesh(new THREE.BoxGeometry(.45, .04, 1), new THREE.MeshBasicMaterial({ color: '#e6eef5', transparent: true, opacity: .5, depthWrite: false })); wake.visible = false; scene.add(wake);
         const entry = H.waterColumn(r, { height: 2.5, radius: .35, duration: 1.4, drops: 40 }); entry.position.copy(splashPos); scene.add(entry);
-        const boom = H.fireball(r, { size: p.explosionSize * 1.1, duration: 3.0, debris: p.debris, sparks: 60 }); boom.position.copy(target).setY(.6); scene.add(boom);
+        const boom = H.fireball(r, { size: p.explosionSize * 1.1, duration: 3.0, debris: p.debris, sparks: 60 }); boom.position.copy(end).setY(.6); scene.add(boom);   // genau am Einschlag an der Bordwand
         const splash = H.waterColumn(r, { height: p.splashHeight * 1.05, radius: .5, duration: 2.8, drops: 120 }); splash.position.copy(end).setY(.25); scene.add(splash);
         pl.torp = { torp: torpG, wake, entry, boom, splash, tDrop, tSplash, tHit, rel, v, splashPos, end };
       } else {
         // Bomben: werden mit der Fluggeschwindigkeit ausgeklinkt und fallen ballistisch. Abwurfpunkt so gewählt,
         // dass die erste Bombe das Ziel trifft; weitere Bomben fallen in kurzem Abstand dahinter ins Wasser.
         let best = .25, bestD = 1e9;
-        for (let u = .15; u <= .5; u += .005) {
-          curve.getPoint(u, tmp); velAt(curve, u, dur, tmp2);
+        for (let u = .1; u <= .6; u += .0025) {
+          curve.getPointAt(u, tmp); velAt(curve, u, dur, tmp2);
+          if (tmp.y > 19 || tmp.x < target.x - 22 || tmp.x > target.x) continue;       // nur im Sturzflug kurz vor dem Ziel ausklinken
           const tf = Math.sqrt(2 * Math.max(0, tmp.y - 1.2) / G);
           const d = Math.hypot(tmp.x + tmp2.x * tf - target.x, tmp.z + tmp2.z * tf - target.z);
           if (d < bestD) { bestD = d; best = u; }
@@ -147,11 +156,12 @@ export default {
         for (let k = 0; k < p.bombsPer; k++) {
           const u = best + k * (.09 / dur) * p.attackSpeed;          // nächste Bombe ~0,09 s später
           const tDrop = t0 + u * dur;
-          const rel = curve.getPoint(u).sub(new THREE.Vector3(0, .35, 0)), v = velAt(curve, u, dur, new THREE.Vector3());
+          const rel = curve.getPointAt(u).sub(new THREE.Vector3(0, .35, 0)), v = velAt(curve, u, dur, new THREE.Vector3());
           const tf = Math.sqrt(2 * Math.max(0, rel.y - 1.2) / G), tHit = tDrop + tf;
           if (k === 0) { v.x = (target.x - rel.x) / tf; v.z = (target.z - rel.z) / tf; }   // erste Bombe sitzt
-          const land = new THREE.Vector3(rel.x + v.x * tf, 1.2, rel.z + v.z * tf);
+          let land = new THREE.Vector3(rel.x + v.x * tf, 1.2, rel.z + v.z * tf), tHitB = tHit;
           const onShip = Math.hypot(land.x - target.x, land.z - target.z) < ship.len * .5 + .8;
+          if (!onShip) { const tw = Math.sqrt(2 * Math.max(0, rel.y - .25) / G); land = new THREE.Vector3(rel.x + v.x * tw, .25, rel.z + v.z * tw); tHitB = tDrop + tw; }   // Fehlwurf fällt bis aufs Wasser
           const model = H.bomb(2.1, H.glowMat(H.ROLE.axis, 1.2), .21); model.visible = false; scene.add(model);
           let boom = null, splash = null;
           if (onShip) {
@@ -161,9 +171,9 @@ export default {
           } else {
             splash = H.waterColumn(r, { height: p.splashHeight * (.8 + r() * .5), radius: .55 + r() * .3, duration: 2.8, drops: 140 }); splash.position.copy(land).setY(.25); scene.add(splash);
             boom = H.fireball(r, { size: p.explosionSize * .45, duration: 1.2, debris: 0, sparks: 30, ring: false }); boom.position.copy(land).setY(.4); scene.add(boom);
-            addBlast(ship, land, tHit, .8 + p.explosionSize * .4);                  // Nahtreffer im Wasser: kleiner Radius
+            addBlast(ship, land, tHitB, .8 + p.explosionSize * .4);                 // Nahtreffer im Wasser: kleiner Radius
           }
-          const b = { model, rel, v, tDrop, tHit, boom, splash, pl };
+          const b = { model, rel, v, tDrop, tHit: tHitB, boom, splash, pl };
           bombs.push(b); pl.bombs.push(b);
         }
       }
@@ -208,8 +218,8 @@ export default {
         for (const pl of planes) {
           const u = H.span(t, pl.t0, pl.t0 + pl.dur);
           pl.m.visible = u > 0 && u < 1;
-          pl.curve.getPoint(u, pl.m.position);
-          pl.curve.getPoint(Math.min(1, u + .004), tmp);
+          pl.curve.getPointAt(u, pl.m.position);
+          pl.curve.getPointAt(Math.min(1, u + .004), tmp);
           pl.m.lookAt(tmp);
           pl.m.rotateZ(pl.bank * Math.sin(u * Math.PI));
           if (pl.torp) {
