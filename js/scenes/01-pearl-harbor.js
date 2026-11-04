@@ -10,9 +10,8 @@ export default {
   caption: { title: 'Pearl Harbor', sub: '7. Dezember 1941' },
   params: {
     ships: { type: 'number', min: 1, max: 10, step: 1, value: 6, label: 'Schiffe' },
-    planes: { type: 'number', min: 1, max: 14, step: 1, value: 6, label: 'Flugzeuge' },
+    planes: { type: 'number', min: 1, max: 14, step: 1, value: 6, label: 'Flugzeuge (je eine Bombe/ein Torpedo, je Schiff ein Treffer)' },
     torpedoPlanes: { type: 'number', min: 0, max: 8, step: 1, value: 2, label: 'davon Torpedoflugzeuge' },
-    bombsPer: { type: 'number', min: 1, max: 4, step: 1, value: 2, label: 'Bomben je Bomber (Rest fällt ins Wasser)' },
     attackSpeed: { type: 'number', min: .5, max: 2, step: .05, value: 1, label: 'Angriffstempo' },
     explosionSize: { type: 'number', min: .5, max: 5, step: .1, value: 1.5, label: 'Explosionsgröße' },
     debris: { type: 'number', min: 0, max: 200, step: 10, value: 30, label: 'Trümmer je Explosion' },
@@ -99,12 +98,19 @@ export default {
     const shipAt = (x, z) => ships.find(sh => { sh.yaw.updateMatrixWorld(true); const l = sh.yaw.worldToLocal(new THREE.Vector3(x, 0, z)); return Math.abs(l.x) < sh.len * .55 && Math.abs(l.z) < sh.s.userData.beam * .55; }) || null;
     const velAt = (curve, u, dur, out) => { curve.getPointAt(Math.min(1, u + .002), out); curve.getPointAt(Math.max(0, u - .002), tmp3); return out.sub(tmp3).divideScalar(.004 * dur); };
     // Torpedos nur auf Schiffe der vorderen Reihe (sonst müsste der Flieger tief durch die vordere Reihe), von rechts her
-    const front = ships.map((sh, k) => k).filter(k => k % 2 === 1).reverse();
+    // Zielverteilung: jedes Schiff wird getroffen. Torpedos nur auf die vordere Reihe (sonst müsste der Flieger tief
+    // durch die vordere Reihe), abwechselnd von den Enden her; die Bomber nehmen die übrigen Schiffe, mittleres zuerst.
+    const nT = Math.min(p.torpedoPlanes, p.planes);
+    const frontAll = ships.map((sh, k) => k).filter(k => k % 2 === 1);
+    const front = []; for (let a = frontAll.length - 1, b = 0; front.length < frontAll.length; ) { front.push(frontAll[a--]); if (front.length < frontAll.length) front.push(frontAll[b++]); }
+    const torpTargets = front.slice(0, Math.min(nT, front.length));
+    const pref = [2, 4, 0, 3, 1, 5, ...ships.map((sh, k) => k)].filter((k, j, a) => k < ships.length && a.indexOf(k) === j);
+    const bombTargets = pref.filter(k => !torpTargets.includes(k));
+    if (!bombTargets.length) bombTargets.push(...pref);
     for (let i = 0; i < p.planes; i++) {
       const torpedo = i >= p.planes - p.torpedoPlanes;                             // erst die Bomber, danach die Torpedoflieger
       const kT = i - (p.planes - p.torpedoPlanes);
-      const order = [2, 4, 0, 3, 1, 5];                                              // erster Angriff aufs mittlere Schiff, dann abwechselnd
-      const ship = torpedo && front.length ? ships[front[kT % front.length]] : ships[order[i % order.length] % ships.length];
+      const ship = torpedo && torpTargets.length ? ships[torpTargets[kT % torpTargets.length]] : ships[bombTargets[i % bombTargets.length]];
       const target = ship.yaw.position.clone();
       const m = H.faceZ(H.aircraft(H.glowMat(H.ROLE.axis)));
       m.visible = false; scene.add(m);
@@ -157,7 +163,7 @@ export default {
           const d = Math.hypot(tmp.x + tmp2.x * tf - target.x, tmp.z + tmp2.z * tf - target.z);
           if (d < bestD) { bestD = d; best = u; }
         }
-        for (let k = 0; k < p.bombsPer; k++) {
+        for (let k = 0; k < 1; k++) {                                                // eine Bombe pro Flieger
           const u = best + k * (.09 / dur) * p.attackSpeed;          // nächste Bombe ~0,09 s später
           const tDrop = t0 + u * dur;
           const rel = curve.getPointAt(u).sub(new THREE.Vector3(0, .35, 0)), v = velAt(curve, u, dur, new THREE.Vector3());
