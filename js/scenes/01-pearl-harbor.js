@@ -93,6 +93,10 @@ export default {
       if (sa.flip) { x = -x; dir = -dir; }
       return { x: mid + x, dir, moving, S, fast };
     };
+    // Fallzeit einer Bombe bis zur Höhe yT, mit Abwurfgeschwindigkeit (im Sturzflug fällt sie schon schnell nach unten)
+    const fallTime = (p0, v, yT) => (v.y + Math.sqrt(Math.max(0, v.y * v.y + 2 * G * (p0.y - yT)))) / G;
+    // Schiff, auf dessen Deck ein Punkt liegt (Schiffsraum), sonst null
+    const shipAt = (x, z) => ships.find(sh => { sh.yaw.updateMatrixWorld(true); const l = sh.yaw.worldToLocal(new THREE.Vector3(x, 0, z)); return Math.abs(l.x) < sh.len * .55 && Math.abs(l.z) < sh.s.userData.beam * .55; }) || null;
     const velAt = (curve, u, dur, out) => { curve.getPointAt(Math.min(1, u + .002), out); curve.getPointAt(Math.max(0, u - .002), tmp3); return out.sub(tmp3).divideScalar(.004 * dur); };
     // Torpedos nur auf Schiffe der vorderen Reihe (sonst müsste der Flieger tief durch die vordere Reihe), von rechts her
     const front = ships.map((sh, k) => k).filter(k => k % 2 === 1).reverse();
@@ -149,7 +153,7 @@ export default {
         for (let u = .1; u <= .6; u += .0025) {
           curve.getPointAt(u, tmp); velAt(curve, u, dur, tmp2);
           if (tmp.y > 19 || tmp.x < target.x - 22 || tmp.x > target.x) continue;       // nur im Sturzflug kurz vor dem Ziel ausklinken
-          const tf = Math.sqrt(2 * Math.max(0, tmp.y - 1.2) / G);
+          const tf = fallTime(tmp, tmp2, 1.2);
           const d = Math.hypot(tmp.x + tmp2.x * tf - target.x, tmp.z + tmp2.z * tf - target.z);
           if (d < bestD) { bestD = d; best = u; }
         }
@@ -157,17 +161,19 @@ export default {
           const u = best + k * (.09 / dur) * p.attackSpeed;          // nächste Bombe ~0,09 s später
           const tDrop = t0 + u * dur;
           const rel = curve.getPointAt(u).sub(new THREE.Vector3(0, .35, 0)), v = velAt(curve, u, dur, new THREE.Vector3());
-          const tf = Math.sqrt(2 * Math.max(0, rel.y - 1.2) / G), tHit = tDrop + tf;
+          const tf = fallTime(rel, v, 1.2), tHit = tDrop + tf;
           if (k === 0) { v.x = (target.x - rel.x) / tf; v.z = (target.z - rel.z) / tf; }   // erste Bombe sitzt
           let land = new THREE.Vector3(rel.x + v.x * tf, 1.2, rel.z + v.z * tf), tHitB = tHit;
-          const onShip = Math.hypot(land.x - target.x, land.z - target.z) < ship.len * .5 + .8;
-          if (!onShip) { const tw = Math.sqrt(2 * Math.max(0, rel.y - .25) / G); land = new THREE.Vector3(rel.x + v.x * tw, .25, rel.z + v.z * tw); tHitB = tDrop + tw; }   // Fehlwurf fällt bis aufs Wasser
+          const hitShip = shipAt(land.x, land.z);                                        // auch ein Nachbarschiff kann getroffen werden
+          const onShip = !!hitShip;
+          if (!onShip) { const tw = fallTime(rel, v, .25); land = new THREE.Vector3(rel.x + v.x * tw, .25, rel.z + v.z * tw); tHitB = tDrop + tw; }   // Fehlwurf fällt bis aufs Wasser
           const model = H.bomb(2.1, H.glowMat(H.ROLE.axis, 1.2), .21); model.visible = false; scene.add(model);
           let boom = null, splash = null;
           if (onShip) {
             boom = H.fireball(r, { size: p.explosionSize, duration: 3.0, debris: p.debris, sparks: 60 }); boom.position.copy(land).setY(1.4); scene.add(boom);
-            if (tHit < ship.hit) { ship.hit = tHit; ship.hitX = land.x - target.x; ship.hitSide = land.z > target.z ? 1 : -1; }
-            addBlast(ship, land, tHit, 1.6 + p.explosionSize);
+            const hs = hitShip, hp = hs.yaw.position;
+            if (tHit < hs.hit) { hs.hit = tHit; hs.hitX = land.x - hp.x; hs.hitSide = land.z > hp.z ? 1 : -1; }
+            addBlast(hs, land, tHit, 1.6 + p.explosionSize);
           } else {
             splash = H.waterColumn(r, { height: p.splashHeight * (.8 + r() * .5), radius: .55 + r() * .3, duration: 2.8, drops: 140 }); splash.position.copy(land).setY(.25); scene.add(splash);
             boom = H.fireball(r, { size: p.explosionSize * .45, duration: 1.2, debris: 0, sparks: 30, ring: false }); boom.position.copy(land).setY(.4); scene.add(boom);
@@ -178,7 +184,7 @@ export default {
         }
       }
     }
-    scene.userData.planes = planes;
+    scene.userData.planes = planes; scene.userData.bombs = bombs; scene.userData.ships = ships;
     for (const sh of ships) { const x = Math.max(-sh.len * .4, Math.min(sh.len * .4, sh.hitX)); sh.fires[0].fb.position.x = x; sh.fires[1].fb.position.x = x + (x < 0 ? 2.6 : -2.6); sh.smoke.position.x = x; }
     // ---------- Alarm: sobald das erste Flugzeug im Anflug sichtbar ist, rennen die Matrosen ----------
     const tAlarm = Math.min(...planes.map(q => q.t0)) + 1.0;
