@@ -23,7 +23,7 @@ export default {
     skyColor: { type: 'color', value: '#101722', label: 'Himmel' },
     waterColor: { type: 'color', value: '#1c2d3e', label: 'Wasser' },
     details: { type: 'boolean', value: true, label: 'Hafendetails (Piers, Kräne, Hangars)' },
-    ...H.cameraParams([-3, 11, 45], [2, 10, 39], [5, 2.6, -2], 40)
+    ...H.cameraParams([-20, 7, 24], [-10, 6, 17], [2, 1, -2], 38)
   },
   build({ scene, params: p, rng: r, shadows }) {
     H.sky(scene, p.skyColor, 50, 140);
