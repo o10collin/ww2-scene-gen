@@ -417,7 +417,87 @@ export function aircraft(color = P.grey, { span: wing = 3.2, length = 2.6, engin
 // Kriegsschiff: Rumpf als extrudierte Form mit spitzem Bug, Deck, gestaffelte Aufbauten mit Brücke, 1–2 geneigte
 // Schornsteine, Masten, Geschütztürme mit Doppelrohren, Flak-Lafetten, Rettungsboote an Davits, Reling.
 // userData: lanes (freie Laufwege auf den Seitendecks), aa (Flak-Positionen), deckY, len, beam
+// Low-Poly-Kriegsschiff: Rumpf aus wenigen schrägen Flächen (Spantquerschnitte, spitzer ausfallender Bug, flaches Heck),
+// blockige Aufbauten, Brücke als Pyramidenstumpf, sechseckige Schornsteine und Türme, Kantstab-Rohre.
+// Gleiche userData wie ship(): lanes, aa, deckY, len, beam
+function shipLP(color = P.steel, { length = 8, beam = 1.9, guns = 2, funnels = 1, seed = 1, tint = 1 } = {}) {
+  const g = new THREE.Group();
+  const base = new THREE.Color(color).multiplyScalar(tint);
+  const dark = base.clone().multiplyScalar(.55), deckC = base.clone().multiplyScalar(.78), darker = base.clone().multiplyScalar(.4);
+  const L = length, B = beam, H2 = .95, keel = -.3, rr = rng(seed * 131 + 7);
+  // Spanten: x, halbe Deckbreite, halbe Kielbreite, Deckhöhe (Sprung zum Bug), Kiel-x-Versatz (ausfallender Steven)
+  const st = [[-L * .5, .40, .24, 0], [-L * .3, .5, .31, 0], [L * .18, .5, .30, 0], [L * .38, .32, .13, .06], [L * .56, .015, .01, .2]];
+  const pts = st.map(([x, wd, wk, sh], i) => ({
+    dl: new THREE.Vector3(x, H2 + sh, -wd * B), dr: new THREE.Vector3(x, H2 + sh, wd * B),
+    kr: new THREE.Vector3(i === st.length - 1 ? x - L * .07 : x, keel, wk * B), kl: new THREE.Vector3(i === st.length - 1 ? x - L * .07 : x, keel, -wk * B)
+  }));
+  const tri = [], push = (a, b, c) => tri.push(a, b, c);
+  const quad = (a, b, c, d) => { push(a, b, c); push(a, c, d); };
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p = pts[i], q = pts[i + 1];
+    quad(p.dr, q.dr, q.kr, p.kr); quad(p.kl, q.kl, q.dl, p.dl); quad(p.kr, q.kr, q.kl, p.kl); quad(p.dl, q.dl, q.dr, p.dr);
+  }
+  const s0 = pts[0]; quad(s0.dl, s0.dr, s0.kr, s0.kl);                                  // Heckspiegel
+  const pos = new Float32Array(tri.length * 3), col = new Float32Array(tri.length * 3);
+  const e1 = new THREE.Vector3(), e2 = new THREE.Vector3(), n = new THREE.Vector3(), c = new THREE.Vector3(), ref = new THREE.Vector3();
+  for (let f = 0; f < tri.length; f += 3) {
+    let [a, b, d] = [tri[f], tri[f + 1], tri[f + 2]];
+    n.crossVectors(e1.subVectors(b, a), e2.subVectors(d, a));
+    c.copy(a).add(b).add(d).multiplyScalar(1 / 3); ref.set(c.x * .6, H2 * .35, 0);
+    if (n.dot(c.sub(ref)) < 0) [b, d] = [d, b];                                         // Flächen nach außen drehen
+    [a, b, d].forEach((v, k) => pos.set([v.x, v.y, v.z], (f + k) * 3));
+    const br = .8 + rr() * .2; for (let k = 0; k < 3; k++) col.set([br, br, br], (f + k) * 3);
+  }
+  const hg = new THREE.BufferGeometry(); hg.setAttribute('position', new THREE.BufferAttribute(pos, 3)); hg.setAttribute('color', new THREE.BufferAttribute(col, 3)); hg.computeVertexNormals();
+  g.add(mesh(hg, mat(base, { vertexColors: true })));
+  const deckY = H2 + .02;
+  const vc = { vertexColors: true };
+  // Aufbauten
+  const sup = box(L * .32, 1.05, B * .62, base); sup.position.set(-L * .03, deckY + .52, 0); g.add(sup);
+  const sup2 = box(L * .2, .65, B * .5, base); sup2.position.set(-L * .02, deckY + 1.37, 0); g.add(sup2);
+  const bridge = mesh(new THREE.CylinderGeometry(.5, .72, .55, 4), mat(base, vc)); bridge.rotation.y = Math.PI / 4; bridge.scale.set(L * .11 / 1.2, 1, B * .56 / 1.2); bridge.position.set(L * .05, deckY + 1.97, 0); g.add(bridge);
+  const win = box(L * .1, .1, B * .5, darker); win.position.set(L * .05, deckY + 2.05, 0); win.castShadow = false; g.add(win);
+  const roof = box(L * .06, .25, B * .26, dark); roof.position.set(L * .04, deckY + 2.38, 0); g.add(roof);
+  // Schornsteine, sechseckig und geneigt
+  for (let i = 0; i < funnels; i++) {
+    const x = -L * (.13 + i * .11);
+    const f = mesh(new THREE.CylinderGeometry(.22, .3, 1.5, 6), mat(dark, vc)); f.position.set(x, deckY + 1.6, 0); f.rotation.z = .14; g.add(f);
+    const cap = mesh(new THREE.CylinderGeometry(.25, .23, .14, 6), mat(P.black, vc)); cap.position.set(x - .2, deckY + 2.38, 0); cap.rotation.z = .14; g.add(cap);
+  }
+  // Masten als Kantstäbe
+  const mast = box(.09, 3.2, .09, darker); mast.position.set(L * .12, deckY + 2.6, 0); g.add(mast);
+  const yard = box(.06, .06, 1.5, darker); yard.position.set(L * .12, deckY + 3.6, 0); g.add(yard);
+  const top = mesh(new THREE.CylinderGeometry(.16, .12, .22, 5), mat(darker, vc)); top.position.set(L * .12, deckY + 3.2, 0); g.add(top);
+  const mast2 = box(.07, 2.2, .07, darker); mast2.position.set(-L * .32, deckY + 1.9, 0); g.add(mast2);
+  // Geschütztürme: sechseckig, Rohre als Kantstäbe
+  const turret = (x, y, dir, big = 1) => {
+    const t = new THREE.Group();
+    const body = mesh(new THREE.CylinderGeometry(.42 * big, .48 * big, .34, 6), mat(base, vc)); body.position.y = .17; body.rotation.y = Math.PI / 6; t.add(body);
+    for (const dz of [-.13 * big, .13 * big]) { const bar = box(1.35 * big, .08, .08, darker); bar.position.set(dir * (.35 * big + .62 * big), .24, dz); t.add(bar); }
+    t.position.set(x, y, 0); g.add(t);
+  };
+  turret(L * .3, deckY, 1, 1);
+  if (guns > 1) { const barb = mesh(new THREE.CylinderGeometry(.5, .55, .35, 6), mat(base, vc)); barb.position.set(L * .19, deckY + .17, 0); g.add(barb); turret(L * .19, deckY + .35, 1, .9); }
+  turret(-L * .37, deckY, -1, .9);
+  if (guns > 1 && L > 11) { const barb = mesh(new THREE.CylinderGeometry(.45, .5, .3, 6), mat(base, vc)); barb.position.set(-L * .27, deckY + .15, 0); g.add(barb); turret(-L * .27, deckY + .3, -1, .8); }
+  // Flak-Lafetten auf den Aufbauten (Positionen wie im detaillierten Modell)
+  const aa = [];
+  for (const side of [-1, 1]) for (const x of [L * .09, -L * .14]) {
+    const m = mesh(new THREE.CylinderGeometry(.12, .14, .22, 5), mat(darker, vc)); m.position.set(x, deckY + 1.16, side * B * .22); g.add(m);
+    aa.push(new THREE.Vector3(x, deckY + 1.8, side * B * .22));
+  }
+  // Rettungsboote als Keile über den Seitendecks
+  for (const side of [-1, 1]) for (let i = 0; i < 2; i++) {
+    const lb = mesh(new THREE.CylinderGeometry(.12, .12, .62, 3), mat(dark, vc)); lb.rotation.z = Math.PI / 2; lb.rotation.x = side > 0 ? Math.PI : 0;
+    lb.position.set(-L * .07 - i * L * .11, deckY + 1.15, side * (B * .5 + .06)); g.add(lb);
+  }
+  g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  g.userData = { deckY, len: L, beam: B, aa, lanes: [{ x0: -L * .3, x1: L * .14, z: B * .5 - .2 }, { x0: -L * .3, x1: L * .14, z: -(B * .5 - .2) }] };
+  return g;
+}
+
 export function ship(color = P.steel, { length = 8, beam = 1.9, guns = 2, funnels = 1, seed = 1, tint = 1 } = {}) {
+  if (lowPoly) return shipLP(color, { length, beam, guns, funnels, seed, tint });
   const g = new THREE.Group();
   const rr = rng(seed);
   const base = new THREE.Color(color).multiplyScalar(tint);
