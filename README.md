@@ -31,7 +31,7 @@ geladen, es ist also eine Internetverbindung nötig. Empfohlener Browser: Chrome
 | Links | Szenenliste (01–16), Klick wechselt die Szene. Tastatur: Bild auf / Bild ab |
 | Mitte | Vorschau in Exportauflösung, darunter Skripttext, Transport (Leertaste = Play/Pause, ←/→ = ein Bild) |
 | Rechts, „Szene“ | Dauer, Bauchbinde (zwei Zeilen), Untertiteltext, szenenspezifische Parameter, Kamera |
-| Rechts, „Global“ | Auflösung, Shading, Schatten, Filmkorn, Vignette, Letterbox, Ein-/Ausblenden, Textstil, Export |
+| Rechts, „Global“ | Auflösung, Shading, Schatten, Filmkorn, Vignette, VHS-Filter, Letterbox, Ein-/Ausblenden, Textstil, Export |
 
 Alle Einstellungen werden automatisch im Browser gespeichert (localStorage) und lassen sich unter
 „Einstellungen sichern“ als JSON exportieren und wieder importieren.
@@ -91,6 +91,15 @@ Serifen-Bauchbinde unten links (Datum über Ort). Karten sind dunkle Geländetex
 roten Flächen für gegnerisches Gebiet, gesperrten Ländernamen und leuchtenden Pfeilen. Alles ist unter
 „Global → Bild / Look / Text“ einstellbar, der frühere helle Comic-Look ist über Shading „toon“,
 Abdunkeln 0 und Bloom 0 wieder erreichbar.
+
+## VHS-Filter
+
+„Global → Look → VHS-Filter“ (Standard: aus) legt als letzter Schritt einen Videokassetten-Look über das fertige
+Bild, also auch über Bauchbinde und Untertitel: weiche Luma mit Kantenüberschwingen, verschmierte und nach rechts
+versetzte Farbe, Zeilenzittern, Kopfumschalt-Störung am unteren Rand, ein langsam wandernder Tracking-Streifen,
+vereinzelte Dropouts, Zeilenstruktur und Bandrauschen. „VHS Stärke“ (0,2–2) regelt alles gemeinsam,
+„VHS-Einblendung“ blendet „PLAY ▶“ und ein Bandzählwerk ein (Schrift VT323). Der Filter hängt nur von der
+Szenenzeit ab und landet deshalb bildgenau im Export (Code: `js/vhs.js`).
 
 ## Low-Poly-Look
 

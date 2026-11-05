@@ -7,6 +7,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { SCENES } from './scenes/index.js';
 import { GUI } from './gui.js';
 import * as H from './common.js';
+import { createVHS, drawOSD } from './vhs.js';
 
 const $ = s => document.querySelector(s);
 const LS = 'ww2gen.';
@@ -32,6 +33,9 @@ const GLOBAL_SCHEMA = {
   grain: { type: 'number', min: 0, max: .5, step: .01, value: .12, label: 'Filmkorn', group: 'Look' },
   vignette: { type: 'number', min: 0, max: 1, step: .01, value: .6, label: 'Vignette', group: 'Look' },
   letterbox: { type: 'number', min: 0, max: .2, step: .005, value: 0, label: 'Letterbox', group: 'Look' },
+  vhs: { type: 'boolean', value: false, label: 'VHS-Filter', group: 'Look' },
+  vhsStrength: { type: 'number', min: .2, max: 2, step: .05, value: 1, label: 'VHS Stärke', group: 'Look' },
+  vhsOSD: { type: 'boolean', value: false, label: 'VHS-Einblendung (PLAY, Zählwerk)', group: 'Look' },
   fadeIn: { type: 'number', min: 0, max: 3, step: .1, value: .5, label: 'Einblenden (s)', group: 'Look' },
   fadeOut: { type: 'number', min: 0, max: 3, step: .1, value: .5, label: 'Ausblenden (s)', group: 'Look' },
   textOff: { type: 'boolean', value: false, label: 'ALLE Texte aus (für Nachbearbeitung)', group: 'Text' },
@@ -73,6 +77,7 @@ let W = 1920, Hh = 1080;
 let vignetteCache = null;
 let composer = null, renderPass = null, bloomPass = null;
 const noise = [];
+const vhs = createVHS(renderer);
 
 function resolution() {
   const p = global.preset;
@@ -262,6 +267,10 @@ function composite(t) {
   if (lb > 0) { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, lb); ctx.fillRect(0, Hh - lb, W, lb); }
   const fade = 1 - Math.min(global.fadeIn ? H.span(t, 0, global.fadeIn) : 1, global.fadeOut ? H.span(dur - t, 0, global.fadeOut) : 1);
   if (fade > 0) { ctx.globalAlpha = fade; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, Hh); ctx.globalAlpha = 1; }
+  if (global.vhs) {
+    if (global.vhsOSD && !global.textOff) drawOSD(ctx, W, Hh, t);
+    vhs(out, ctx, t, global.vhsStrength);
+  }
 }
 
 window.__studio = { get active() { return active; }, state, renderer, global, loadScene, renderAt, H };
