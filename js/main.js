@@ -11,6 +11,7 @@ import { createVHS, drawOSD } from './vhs.js';
 
 const $ = s => document.querySelector(s);
 const LS = 'ww2gen.';
+const BUILD = '2026-11-05 b';   // in der Statuszeile sichtbar: zeigt, ob der Browser den aktuellen Code geladen hat
 
 // ---------- Globale Einstellungen ----------
 const GLOBAL_SCHEMA = {
@@ -51,7 +52,7 @@ const GLOBAL_SCHEMA = {
   subtitles: { type: 'boolean', value: false, label: 'Skripttext als Untertitel', group: 'Untertitel' },
   subtitleMode: { type: 'select', options: ['Ganzer Text', 'Satzweise (über die Szene verteilt)', 'Wortweise (Schreibmaschine)'], value: 'Ganzer Text', label: 'Anzeige', group: 'Untertitel' },
   subtitleStart: { type: 'number', min: 0, max: 10, step: .1, value: .6, label: 'Ab (s)', group: 'Untertitel' },
-  subtitleEndGap: { type: 'number', min: 0, max: 10, step: .1, value: 0, label: 'Bis (s vor Szenenende)', group: 'Untertitel' },
+  subtitleEndGap: { type: 'number', min: 0, max: 10, step: .1, value: .3, label: 'Bis (s vor Szenenende)', group: 'Untertitel' },
   subtitleFade: { type: 'number', min: 0, max: 2, step: .05, value: .5, label: 'Ein-/Ausblenden (s)', group: 'Untertitel' },
   subtitleSize: { type: 'number', min: .4, max: 3, step: .05, value: 1, label: 'Größe', group: 'Untertitel' },
   subtitleFont: { type: 'select', options: ['wie Bauchbinde', 'Inter', 'Cormorant Garamond', 'Georgia', 'Arial', 'Courier New', 'VT323'], value: 'wie Bauchbinde', label: 'Schrift', group: 'Untertitel' },
@@ -82,9 +83,21 @@ const global = {};
 for (const [k, s] of Object.entries(GLOBAL_SCHEMA)) global[k] = s.value;
 Object.assign(global, load('global'));
 // alte Untertitel-Standardwerte (Start 0 s, Blende 0,25 s: das Einblenden ging in der Schwarzblende unter) anheben
+// ungültige gespeicherte Werte (z. B. null/NaN aus einer Komma-Eingabe) auf Standard zurücksetzen
+function toNum(v) { return typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? +v.replace(',', '.') : NaN; }
+for (const [k, sc] of Object.entries(GLOBAL_SCHEMA)) {
+  const v = global[k];
+  if (sc.type === 'number') global[k] = Number.isFinite(toNum(v)) ? toNum(v) : sc.value;
+  else if (sc.type === 'select' && !sc.options.includes(v)) global[k] = sc.value;
+  else if (sc.type === 'boolean' && typeof v !== 'boolean') global[k] = sc.value;
+}
 try {
+  // alte Untertitel-Standardwerte anheben: Start 0 s / Blende 0,25 s gingen in der Schwarzblende unter,
+  // Ende 0 s fiel mit der Ausblende der Szene zusammen
   if (!localStorage.getItem(LS + 'mig.subFade') && global.subtitleStart === 0 && global.subtitleFade === .25) { global.subtitleStart = GLOBAL_SCHEMA.subtitleStart.value; global.subtitleFade = GLOBAL_SCHEMA.subtitleFade.value; }
-  localStorage.setItem(LS + 'mig.subFade', '1');
+  if (!localStorage.getItem(LS + 'mig.subEnd') && global.subtitleEndGap === 0) global.subtitleEndGap = GLOBAL_SCHEMA.subtitleEndGap.value;
+  if (!localStorage.getItem(LS + 'mig.subStart') && global.subtitleStart === 0) global.subtitleStart = GLOBAL_SCHEMA.subtitleStart.value;
+  for (const m of ['subFade', 'subEnd', 'subStart']) localStorage.setItem(LS + 'mig.' + m, '1');
 } catch { /* kein Speicher */ }
 
 function load(key) { try { return JSON.parse(localStorage.getItem(LS + key) || '{}'); } catch { return {}; } }
@@ -144,7 +157,12 @@ let rebuildTimer = null;
 function paramsFor(def) {
   const p = {};
   for (const [k, s] of Object.entries(sceneSchema(def))) p[k] = s.value;
-  Object.assign(p, load('scene.' + def.id));
+  const schema = sceneSchema(def), saved = load('scene.' + def.id);
+  for (const [k, v] of Object.entries(saved)) {
+    const sc = schema[k];
+    if (sc && sc.type === 'number' && !Number.isFinite(toNum(v))) continue;   // ungültige Zahl (z. B. null) -> Standard behalten
+    p[k] = sc && sc.type === 'number' ? toNum(v) : v;
+  }
   return p;
 }
 function sceneSchema(def) {
@@ -667,7 +685,7 @@ buildGlobalGui();
 applyResolution();
 status('Lade Figurenmodelle …');
 H.preloadModels(k => status(`Modell geladen: ${k}`)).then(() => {
-  status('Bereit.');
+  status('Bereit. (Stand ' + BUILD + ')');
   const startIndex = Math.min(SCENES.length - 1, +(location.hash.slice(1)) - 1 || 0);
   loadScene(startIndex >= 0 ? startIndex : 0);
   requestAnimationFrame(frame);

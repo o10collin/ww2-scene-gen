@@ -22,11 +22,20 @@ export class GUI {
       const wrap = document.createElement('span'); wrap.className = 'num';
       input = document.createElement('input'); input.type = 'range';
       input.min = schema.min; input.max = schema.max; input.step = schema.step ?? 1; input.value = obj[key];
-      const num = document.createElement('input'); num.type = 'number'; num.step = schema.step ?? 1; num.value = obj[key];
-      input.oninput = () => { obj[key] = parseFloat(input.value); num.value = input.value; fire(); };
-      num.onchange = () => { obj[key] = parseFloat(num.value); input.value = num.value; fire(); };
+      // Textfeld statt type=number: nimmt „0,5“ und „0.5“ an (deutsche Tastatur), ungültige Eingaben werden verworfen
+      const num = document.createElement('input'); num.type = 'text'; num.inputMode = 'decimal';
+      const show = v => String(+(+v).toFixed(4)).replace('.', ',');
+      num.value = show(obj[key]);
+      input.oninput = () => { obj[key] = parseFloat(input.value); num.value = show(input.value); fire(); };
+      num.onchange = () => {
+        let v = parseFloat(String(num.value).replace(',', '.').trim());
+        if (!Number.isFinite(v)) { num.value = show(obj[key]); return; }
+        if (schema.min !== undefined) v = Math.max(schema.min, v);
+        if (schema.max !== undefined) v = Math.min(schema.max, v);
+        obj[key] = v; input.value = v; num.value = show(v); fire();
+      };
       wrap.append(input, num); row.append(wrap);
-      row.sync = () => { input.value = obj[key]; num.value = obj[key]; };
+      row.sync = () => { input.value = obj[key]; num.value = show(obj[key]); };
     } else if (schema.type === 'color') {
       input = document.createElement('input'); input.type = 'color'; input.value = obj[key];
       input.oninput = () => { obj[key] = input.value; fire(); };
