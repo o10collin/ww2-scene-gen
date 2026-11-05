@@ -35,6 +35,7 @@ const GLOBAL_SCHEMA = {
   letterbox: { type: 'number', min: 0, max: .2, step: .005, value: 0, label: 'Letterbox', group: 'Look' },
   vhs: { type: 'boolean', value: false, label: 'VHS-Filter', group: 'Look' },
   vhsStrength: { type: 'number', min: .2, max: 2, step: .05, value: 1, label: 'VHS Stärke', group: 'Look' },
+  vhsStreakSpeed: { type: 'number', min: 0, max: 2, step: .01, value: 1, label: 'VHS Rauschstreifen Tempo (0 = stehend)', group: 'Look' },
   vhsOSD: { type: 'boolean', value: false, label: 'VHS-Einblendung (PLAY, Zählwerk)', group: 'Look' },
   fadeIn: { type: 'number', min: 0, max: 3, step: .1, value: .5, label: 'Einblenden (s)', group: 'Look' },
   fadeOut: { type: 'number', min: 0, max: 3, step: .1, value: .5, label: 'Ausblenden (s)', group: 'Look' },
@@ -269,7 +270,7 @@ function composite(t) {
   if (fade > 0) { ctx.globalAlpha = fade; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, Hh); ctx.globalAlpha = 1; }
   if (global.vhs) {
     if (global.vhsOSD && !global.textOff) drawOSD(ctx, W, Hh, t);
-    vhs(out, ctx, t, global.vhsStrength);
+    vhs(out, ctx, t, global.vhsStrength, global.vhsStreakSpeed);
   }
 }
 

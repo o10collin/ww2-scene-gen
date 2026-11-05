@@ -7,7 +7,7 @@ import * as THREE from 'three';
 const FRAG = /* glsl */`
 uniform sampler2D tDiffuse;
 uniform vec2 res;
-uniform float time, frame, strength;
+uniform float time, frame, strength, streakT;
 varying vec2 vUv;
 float hash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 float vnoise(float x) { float i = floor(x), f = fract(x); return mix(hash(vec2(i, 1.3)), hash(vec2(i + 1., 1.3)), f * f * (3. - 2. * f)); }
@@ -42,10 +42,15 @@ void main() {
   c = mix(c, ((c - .5) * .82 + .5) * .82 - .025, s1);
   // horizontale Rauschstreifen (kurze helle/dunkle Striche, leicht farbig)
   float xs = vUv.x * res.x / (sc * 46.), fx = fract(xs), ix = floor(xs), sm = fx * fx * (3. - 2. * fx);
+  // streakT: Zeit der Streifen (Szenenzeit × Geschwindigkeit, 30 Zustände je Sekunde bei 1×); zwischen zwei Zuständen
+  // weich überblenden, damit langsame Einstellungen fließen statt zu springen
+  float sf = floor(streakT), sb = fract(streakT); sb = sb * sb * (3. - 2. * sb);
   vec3 st;
   for (int k = 0; k < 3; k++) {
-    float o = float(k) * 17.1 + frame * 3.7;
-    st[k] = mix(hash(vec2(ix, row + o)), hash(vec2(ix + 1., row + o)), sm);
+    float o0 = float(k) * 17.1 + sf * 3.7, o1 = o0 + 3.7;
+    float a0 = mix(hash(vec2(ix, row + o0)), hash(vec2(ix + 1., row + o0)), sm);
+    float a1 = mix(hash(vec2(ix, row + o1)), hash(vec2(ix + 1., row + o1)), sm);
+    st[k] = mix(a0, a1, sb);
   }
   float stY = (st.r + st.g + st.b) / 3.;
   c += ((stY - .5) * .05 + (st - .5) * .025) * s;
@@ -65,19 +70,19 @@ void main() {
 export function createVHS(renderer) {
   let tex = null;
   const mat = new THREE.ShaderMaterial({
-    uniforms: { tDiffuse: { value: null }, res: { value: new THREE.Vector2(1, 1) }, time: { value: 0 }, frame: { value: 0 }, strength: { value: 1 } },
+    uniforms: { tDiffuse: { value: null }, res: { value: new THREE.Vector2(1, 1) }, time: { value: 0 }, frame: { value: 0 }, strength: { value: 1 }, streakT: { value: 0 } },
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }',
     fragmentShader: FRAG, depthTest: false, depthWrite: false
   });
   const scene = new THREE.Scene(), cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat); quad.frustumCulled = false; scene.add(quad);
   // Quelle: das 2D-Ausgabebild; Ergebnis landet im WebGL-Canvas des Renderers und wird zurückkopiert
-  return function apply(src, ctx, t, strength) {
+  return function apply(src, ctx, t, strength, streakSpeed = 1) {
     if (!tex || tex.image !== src) { tex?.dispose(); tex = new THREE.CanvasTexture(src); tex.colorSpace = THREE.NoColorSpace; tex.minFilter = tex.magFilter = THREE.LinearFilter; tex.generateMipmaps = false; }
     tex.needsUpdate = true;
     const u = mat.uniforms;
     u.tDiffuse.value = tex; u.res.value.set(src.width, src.height);
-    u.time.value = t; u.frame.value = Math.floor(t * 30); u.strength.value = strength;
+    u.time.value = t; u.frame.value = Math.floor(t * 30); u.strength.value = strength; u.streakT.value = t * 30 * streakSpeed;
     const tm = renderer.toneMapping; renderer.toneMapping = THREE.NoToneMapping;
     renderer.setRenderTarget(null); renderer.render(scene, cam);
     renderer.toneMapping = tm;
