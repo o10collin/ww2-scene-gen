@@ -45,7 +45,7 @@ const GLOBAL_SCHEMA = {
   captionDelay: { type: 'number', min: 0, max: 5, step: .1, value: .6, label: 'Bauchbinde ab (s)', group: 'Text' },
   subtitles: { type: 'boolean', value: false, label: 'Skripttext als Untertitel', group: 'Text' },
   subtitleSize: { type: 'number', min: .4, max: 2, step: .05, value: 1, label: 'Untertitel Größe', group: 'Text' },
-  format: { type: 'select', options: ['WebM (Echtzeit)', 'PNG-Sequenz (Chrome)'], value: 'WebM (Echtzeit)', label: 'Format', group: 'Export' },
+  exportFormat: { type: 'select', options: ['MP4 (H.264, bildgenau)', 'PNG-Sequenz', 'WebM (Echtzeit-Aufnahme)'], value: 'MP4 (H.264, bildgenau)', label: 'Format', group: 'Export' },
   fps: { type: 'select', options: ['24', '25', '30', '50', '60'], value: '30', label: 'Bilder/s', group: 'Export' },
   bitrate: { type: 'number', min: 2, max: 80, step: 1, value: 20, label: 'Bitrate (Mbit/s)', group: 'Export' }
 };
@@ -315,6 +315,7 @@ async function download(blob, name) {
   }
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  status(`Gespeichert: ${name} (${(blob.size / 1e6).toFixed(1)} MB)`);
   return true;
 }
 
@@ -368,6 +369,53 @@ function stopRecording() {
   if (recorder && recorder.state !== 'inactive') recorder.stop();
 }
 
+// ---------- Export: MP4 (H.264), bildgenau ----------
+// Jedes Bild wird einzeln gerendert, mit WebCodecs kodiert und mit mp4-muxer in eine MP4 mit korrekter Länge
+// und Zeitstempeln verpackt. Läuft unabhängig von der Geschwindigkeit des Rechners, ohne ausgefallene Bilder.
+const MP4_MUXER = 'https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.1/+esm';
+async function pickEncoder(w, h, fps, bitrate) {
+  const cands = [['avc1.640033', 'avc'], ['avc1.640028', 'avc'], ['avc1.4d0033', 'avc'], ['avc1.42003e', 'avc'], ['vp09.00.41.08', 'vp9']];
+  for (const [codec, mux] of cands) {
+    const config = { codec, width: w, height: h, bitrate, framerate: fps, latencyMode: 'quality', ...(mux === 'avc' ? { avc: { format: 'avc' } } : {}) };
+    try { const r = await VideoEncoder.isConfigSupported(config); if (r.supported) return { config, mux }; } catch { /* nächster Kandidat */ }
+  }
+  return null;
+}
+async function exportMP4() {
+  if (!window.VideoEncoder) { status('MP4-Export braucht Chrome oder Edge (WebCodecs). Alternativ PNG-Sequenz wählen.'); return; }
+  const fps = +global.fps, dur = active.params.duration, n = Math.ceil(dur * fps);
+  const w = out.width - (out.width % 2), h = out.height - (out.height % 2);
+  const enc = await pickEncoder(w, h, fps, global.bitrate * 1e6);
+  if (!enc) { status('Kein passender Video-Encoder in diesem Browser. Alternativ PNG-Sequenz wählen.'); return; }
+  let M;
+  try { M = await import(MP4_MUXER); } catch (e) { status('MP4-Bibliothek nicht ladbar: ' + e.message); return; }
+  const target = new M.ArrayBufferTarget();
+  const muxer = new M.Muxer({ target, video: { codec: enc.mux, width: w, height: h, frameRate: fps }, fastStart: 'in-memory', firstTimestampBehavior: 'offset' });
+  let encErr = null;
+  const encoder = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: e => { encErr = e; } });
+  encoder.configure(enc.config);
+  state.exporting = true; state.playing = false; state.orbit = false; controls.enabled = false; $('#orbit').checked = false;
+  try {
+    for (let i = 0; i < n; i++) {
+      if (encErr) throw encErr;
+      renderAt(i / fps);
+      const frame = new VideoFrame(out, { timestamp: Math.round(i * 1e6 / fps), duration: Math.round(1e6 / fps) });
+      encoder.encode(frame, { keyFrame: i % (fps * 2) === 0 });
+      frame.close();
+      while (encoder.encodeQueueSize > 4) await new Promise(r => setTimeout(r, 1));
+      if (i % 5 === 0) { status(`MP4: Bild ${i + 1} / ${n}`); await new Promise(r => setTimeout(r, 0)); }
+    }
+    await encoder.flush();
+    if (encErr) throw encErr;
+    muxer.finalize();
+    const blob = new Blob([target.buffer], { type: 'video/mp4' });
+    status('Video wird angeboten …');
+    await download(blob, fileBase() + '.mp4');
+  } catch (e) { status('Fehler beim MP4-Export: ' + (e && e.message || e)); }
+  try { encoder.close(); } catch { /* schon geschlossen */ }
+  state.exporting = false; state.t = 0;
+}
+
 // ---------- Aufnahme: PNG-Sequenz ----------
 async function exportPNG() {
   // Ordnerauswahl (Chrome/Edge, lokal). Im Artifact ist sie gesperrt: dann als ZIP über die Downloads-Funktion.
@@ -399,7 +447,9 @@ async function exportPNG() {
 
 async function exportCurrent() {
   if (state.recording || state.exporting) return;
-  if (global.format.startsWith('PNG')) await exportPNG(); else await recordWebM();
+  if (global.exportFormat.startsWith('PNG')) await exportPNG();
+  else if (global.exportFormat.startsWith('WebM')) await recordWebM();
+  else await exportMP4();
 }
 async function exportAll() {
   if (state.recording || state.exporting) return;

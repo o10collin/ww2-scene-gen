@@ -51,7 +51,12 @@ Alles, was im Video landen soll, wird in das Ausgabebild gezeichnet: 3D-Bild, Ba
 optionale Untertitel, Vignette, Filmkorn, Letterbox und die Blenden. Der Export nimmt genau das auf,
 was in der Vorschau zu sehen ist.
 
-**WebM (Echtzeit)** – spielt die Szene einmal ab und nimmt sie mit dem Browser-Encoder auf.
+**MP4 (H.264, bildgenau)** – Standard. Rendert die Szene Bild für Bild, kodiert mit WebCodecs (H.264, sonst VP9)
+und verpackt mit mp4-muxer in eine MP4 mit korrekter Länge. Kein Bildausfall, unabhängig von der Rechnerleistung, und die
+Datei läuft in jedem Player und Schnittprogramm (Premiere, Resolve, Final Cut, CapCut). Braucht Chrome oder Edge.
+
+**WebM (Echtzeit-Aufnahme)** – spielt die Szene einmal ab und nimmt sie mit dem Browser-Encoder auf. Solche Dateien haben keine Längenangabe und
+laufen in vielen Schnittprogrammen nicht, daher nur als Notlösung.
 Schnell und ohne Zusatzwerkzeug, aber der Tab muss sichtbar bleiben; bei schwacher Grafikkarte
 können Bilder ausfallen. Bitrate einstellbar.
 
