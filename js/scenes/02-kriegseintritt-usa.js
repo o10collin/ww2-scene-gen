@@ -12,7 +12,8 @@ export default {
   script: 'Dies führt dazu, dass die Vereinigten Staaten ihre Neutralität aufgeben und in den Zweiten Weltkrieg eintreten. Deutschland und Italien erklären ihnen kurz darauf den Krieg.',
   caption: { title: 'Die USA treten in den Krieg ein', sub: 'Dezember 1941' },
   params: {
-    globeSize: { type: 'number', min: 2, max: 6, step: .05, value: 4.3, label: 'Globus Radius' },
+    globeSize: { type: 'number', min: 2, max: 8, step: .05, value: 5, label: 'Globus Radius' },
+    globeY: { type: 'number', min: -8, max: 4, step: .05, value: -2, label: 'Globus Höhe (− = tiefer)' },
     rotOffset: { type: 'number', min: -180, max: 180, step: 1, value: 0, label: 'Drehung Korrektur (°)' },
     rotSpeed: { type: 'number', min: 0, max: 10, step: .1, value: 1.5, label: 'Grunddrehung (°/s)' },
     tilt: { type: 'number', min: -45, max: 45, step: 1, value: 16, label: 'Neigung (°)' },
@@ -35,7 +36,7 @@ export default {
     const R = p.globeSize;
     const g = H.globe(R, { ocean: p.oceanColor, land: p.landColor });
     g.children[1].visible = p.atmosphere;
-    const tilt = new THREE.Group(); tilt.rotation.x = p.tilt * Math.PI / 180; tilt.add(g); scene.add(tilt);
+    const tilt = new THREE.Group(); tilt.rotation.x = p.tilt * Math.PI / 180; tilt.position.y = p.globeY; tilt.add(g); scene.add(tilt);
     const U = g.userData, k = R / 5;
 
     // Länderflächen
@@ -66,13 +67,13 @@ export default {
     const labels = [];
     const L = (txt, ll, from, o = {}) => { if (!p.labels) return; const l = U.label(txt, ll[0], ll[1], { size: .62 * k * (o.scale || 1), lift: 1 + .14 * (o.lift || 1), ...o.style }); labels.push({ l, from }); };
     L('Japan', [TOKIO[0] + 9, TOKIO[1] + 4], () => p.tAttack - .3);
-    L('Pearl Harbor', [PEARL[0] - 8, PEARL[1]], () => p.tAttack + 1.2);
+    L('Pearl Harbor', [PEARL[0] + 3, PEARL[1] + 15], () => p.tAttack + 1.2);
     L('USA', USA_C, () => p.tUSA + .3, { scale: 1.25 });
     L('Deutschland', [BERLIN[0] + 2, BERLIN[1] + 13], () => p.tDeclare);
     L('Italien', [ROM[0] - 6, ROM[1] + 6], () => p.tDeclare + .4);
     if (p.labels && p.dates) {
       const dateStyle = { style: { font: "italic 500 60px 'Cormorant Garamond', Georgia, serif", bg: null, color: '#e9d7b4' } };
-      L('7. Dezember 1941', [33, -172], () => p.tAttack + 1.4, { scale: .9, lift: 1.6, ...dateStyle });
+      L('7. Dezember 1941', [46, -168], () => p.tAttack + 1.4, { scale: .9, lift: 1.6, ...dateStyle });
       L('11. Dezember 1941', [38, -36], () => p.tDeclare + 1.6, { scale: .9, lift: 1.5, ...dateStyle });
     }
 
