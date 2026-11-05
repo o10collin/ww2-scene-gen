@@ -104,7 +104,7 @@ Abdunkeln 0 und Bloom 0 wieder erreichbar.
 
 ## VHS-Filter
 
-„Global → Look → VHS-Filter“ (Standard: aus) legt als letzter Schritt einen Videokassetten-Look über das fertige
+„Global → Look → VHS-Filter“ (Standard: an, Stärke 0,4, Streifentempo 0,25) legt als letzter Schritt einen Videokassetten-Look über das fertige
 Bild, also auch über Bauchbinde und Untertitel: weiches Bild, kräftiger RGB-Versatz (zum Rand hin stärker), leichtes
 Geisterbild, entsättigte, kühle und dunklere Farben, feine horizontale Rauschstreifen, leichtes Zeilenzittern,
 Zeilenstruktur, Randabdunklung und seltene Dropouts. „VHS Stärke“ (0,2–2) regelt alles gemeinsam, „VHS Rauschstreifen Tempo“ (0–2, 1 = 30 Wechsel je Sekunde,
