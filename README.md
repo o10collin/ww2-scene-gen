@@ -66,6 +66,11 @@ ffmpeg -framerate 30 -i frame_%05d.png -c:v libx264 -pix_fmt yuv420p -crf 16 01_
 Für DaVinci Resolve, Premiere oder Final Cut kann die PNG-Sequenz auch direkt als Bildsequenz
 importiert werden.
 
+**Im claude.ai-Artifact** blockiert die Umgebung normale Downloads und die Ordnerauswahl. Dort nutzt das Studio die
+Speicherfunktion von claude.ai: Jede Datei (Video, Standbild, Einstellungen) wird angeboten und nach deiner Bestätigung
+gespeichert. Die PNG-Sequenz kommt dort als eine ZIP-Datei (`01_pearl-harbor_png.zip`, ohne Kompression) – entpacken und wie
+oben mit ffmpeg zusammensetzen.
+
 „Alle Szenen nacheinander exportieren“ geht die Liste komplett durch. „Standbild speichern“ sichert
 das aktuelle Bild als PNG (z. B. für Thumbnails).
 

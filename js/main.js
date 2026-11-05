@@ -303,9 +303,45 @@ function mime() {
   return '';
 }
 function fileBase() { return `${String(state.index + 1).padStart(2, '0')}_${active.def.id}`; }
-function download(blob, name) {
+// Speichern: im claude.ai-Artifact über die Downloads-Funktion der Plattform (Bestätigung durch den Betrachter),
+// sonst als normaler Browser-Download
+const downloadsReady = window.claude && window.claude.use ? window.claude.use('downloads').catch(() => null) : Promise.resolve(null);
+const DL_MSG = { declined: 'Speichern abgelehnt.', rate_limited: 'Es ist schon ein Speichern-Dialog offen, bitte kurz warten.', too_large: 'Datei zu groß für diese Ansicht.', rejected_extension: 'Dateityp wird hier nicht unterstützt.' };
+async function download(blob, name) {
+  const dl = await downloadsReady;
+  if (dl) {
+    try { await dl.save({ filename: name, data: blob }); status(`Gespeichert: ${name} (${(blob.size / 1e6).toFixed(1)} MB)`); return true; }
+    catch (e) { status(DL_MSG[e && e.code] || ('Speichern nicht möglich: ' + ((e && e.message) || e))); return false; }
+  }
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  return true;
+}
+
+// Minimaler ZIP-Schreiber (ohne Kompression, PNGs sind schon komprimiert) für die PNG-Sequenz im Artifact
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function zipWriter() {
+  const parts = [], central = []; let offset = 0;
+  const enc = new TextEncoder();
+  return {
+    async add(name, blob) {
+      const data = new Uint8Array(await blob.arrayBuffer()), nm = enc.encode(name), crc = crc32(data);
+      const h = new DataView(new ArrayBuffer(30));
+      h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint32(14, crc, true); h.setUint32(18, data.length, true); h.setUint32(22, data.length, true); h.setUint16(26, nm.length, true);
+      parts.push(h.buffer, nm, data);
+      const c = new DataView(new ArrayBuffer(46));
+      c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint32(16, crc, true); c.setUint32(20, data.length, true); c.setUint32(24, data.length, true); c.setUint16(28, nm.length, true); c.setUint32(42, offset, true);
+      central.push(c.buffer, nm);
+      offset += 30 + nm.length + data.length;
+    },
+    blob() {
+      const size = central.reduce((a, b) => a + b.byteLength, 0), n = central.length / 2;
+      const e = new DataView(new ArrayBuffer(22));
+      e.setUint32(0, 0x06054b50, true); e.setUint16(8, n, true); e.setUint16(10, n, true); e.setUint32(12, size, true); e.setUint32(16, offset, true);
+      return new Blob([...parts, ...central, e.buffer], { type: 'application/zip' });
+    }
+  };
 }
 function recordWebM() {
   return new Promise(resolve => {
@@ -316,10 +352,9 @@ function recordWebM() {
     recorder.ondataavailable = e => e.data.size && chunks.push(e.data);
     recorder.onstop = () => {
       const blob = new Blob(chunks, { type: recorder.mimeType });
-      download(blob, fileBase() + (recorder.mimeType.includes('mp4') ? '.mp4' : '.webm'));
       stream.getTracks().forEach(tr => tr.stop());
-      status(`Gespeichert: ${fileBase()} (${(blob.size / 1e6).toFixed(1)} MB)`);
-      resolve();
+      status('Video wird angeboten …');
+      download(blob, fileBase() + (recorder.mimeType.includes('mp4') ? '.mp4' : '.webm')).then(() => resolve());   // meldet Erfolg oder Ablehnung selbst
     };
     recordResolve = resolve;
     state.orbit = false; controls.enabled = false; $('#orbit').checked = false;
@@ -335,22 +370,29 @@ function stopRecording() {
 
 // ---------- Aufnahme: PNG-Sequenz ----------
 async function exportPNG() {
-  if (!window.showDirectoryPicker) { status('PNG-Sequenz braucht Chrome/Edge (File System Access API). Alternativ WebM wählen.'); return; }
-  let dir;
-  try { dir = await window.showDirectoryPicker({ mode: 'readwrite' }); } catch { status('Abgebrochen.'); return; }
-  const sub = await dir.getDirectoryHandle(fileBase(), { create: true });
+  // Ordnerauswahl (Chrome/Edge, lokal). Im Artifact ist sie gesperrt: dann als ZIP über die Downloads-Funktion.
+  let dir = null, zip = null;
+  if (window.showDirectoryPicker && !(await downloadsReady)) {
+    try { dir = await window.showDirectoryPicker({ mode: 'readwrite' }); }
+    catch (e) { if (e && e.name === 'AbortError') { status('Abgebrochen.'); return; } dir = null; }
+  }
+  if (!dir) zip = zipWriter();
+  const sub = dir ? await dir.getDirectoryHandle(fileBase(), { create: true }) : null;
   const fps = +global.fps, dur = active.params.duration, n = Math.ceil(dur * fps);
   state.exporting = true; state.playing = false; state.orbit = false; controls.enabled = false; $('#orbit').checked = false;
   try {
     for (let i = 0; i < n; i++) {
       renderAt(i / fps);
       const blob = await new Promise(r => out.toBlob(r, 'image/png'));
-      const fh = await sub.getFileHandle(`frame_${String(i).padStart(5, '0')}.png`, { create: true });
-      const w = await fh.createWritable(); await w.write(blob); await w.close();
+      const name = `frame_${String(i).padStart(5, '0')}.png`;
+      if (sub) { const fh = await sub.getFileHandle(name, { create: true }); const w = await fh.createWritable(); await w.write(blob); await w.close(); }
+      else await zip.add(fileBase() + '/' + name, blob);
       status(`PNG-Sequenz: Bild ${i + 1} / ${n}`);
       await new Promise(r => setTimeout(r, 0));
     }
-    status(`Fertig: ${n} Bilder in Ordner „${fileBase()}“. ffmpeg: ffmpeg -framerate ${fps} -i frame_%05d.png -c:v libx264 -pix_fmt yuv420p ${fileBase()}.mp4`);
+    const ff = `ffmpeg -framerate ${fps} -i frame_%05d.png -c:v libx264 -pix_fmt yuv420p ${fileBase()}.mp4`;
+    if (sub) status(`Fertig: ${n} Bilder in Ordner „${fileBase()}“. ${ff}`);
+    else { status('ZIP wird angeboten …'); if (await download(zip.blob(), fileBase() + '_png.zip')) status(`Fertig: ${n} Bilder als ${fileBase()}_png.zip. Entpacken, dann: ${ff}`); }
   } catch (e) { status('Fehler: ' + e.message); }
   state.exporting = false; state.t = 0;
 }

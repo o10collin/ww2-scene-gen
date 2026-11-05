@@ -11,7 +11,7 @@ export default {
   params: {
     ships: { type: 'number', min: 1, max: 10, step: 1, value: 6, label: 'Schiffe' },
     planes: { type: 'number', min: 1, max: 14, step: 1, value: 6, label: 'Flugzeuge (je eine Bombe/ein Torpedo, je Schiff ein Treffer)' },
-    torpedoPlanes: { type: 'number', min: 0, max: 8, step: 1, value: 2, label: 'davon Torpedoflugzeuge' },
+    torpedoCount: { type: 'number', min: 0, max: 8, step: 1, value: 0, label: 'davon Torpedoflieger (Standard: nur Bomben)' },
     attackSpeed: { type: 'number', min: .5, max: 2, step: .05, value: 1, label: 'Angriffstempo' },
     explosionSize: { type: 'number', min: .5, max: 5, step: .1, value: 1.5, label: 'Explosionsgröße' },
     debris: { type: 'number', min: 0, max: 200, step: 10, value: 30, label: 'Trümmer je Explosion' },
@@ -101,7 +101,7 @@ export default {
     // Torpedos nur auf Schiffe der vorderen Reihe (sonst müsste der Flieger tief durch die vordere Reihe), von rechts her
     // Zielverteilung: jedes Schiff wird getroffen. Torpedos nur auf die vordere Reihe (sonst müsste der Flieger tief
     // durch die vordere Reihe), abwechselnd von den Enden her; die Bomber nehmen die übrigen Schiffe, mittleres zuerst.
-    const nT = Math.min(p.torpedoPlanes, p.planes);
+    const nT = Math.min(p.torpedoCount, p.planes);
     const frontAll = ships.map((sh, k) => k).filter(k => k % 2 === 1);
     const mid = (ships.length - 1) / 2, front = frontAll.slice().sort((a, b) => (a < mid) - (b < mid) || a - b);   // Mitte und rechts zuerst, links zuletzt (Abwurf im Bild)
     const torpTargets = front.slice(0, Math.min(nT, front.length));
@@ -109,8 +109,8 @@ export default {
     const bombTargets = pref.filter(k => !torpTargets.includes(k));
     if (!bombTargets.length) bombTargets.push(...pref);
     for (let i = 0; i < p.planes; i++) {
-      const torpedo = i >= p.planes - p.torpedoPlanes;                             // erst die Bomber, danach die Torpedoflieger
-      const kT = i - (p.planes - p.torpedoPlanes);
+      const torpedo = i >= p.planes - p.torpedoCount;                             // erst die Bomber, danach die Torpedoflieger
+      const kT = i - (p.planes - p.torpedoCount);
       const ship = torpedo && torpTargets.length ? ships[torpTargets[kT % torpTargets.length]] : ships[bombTargets[i % bombTargets.length]];
       const target = ship.yaw.position.clone();
       const m = H.faceZ(H.aircraft(H.glowMat(H.ROLE.axis)));
