@@ -48,8 +48,27 @@ const GLOBAL_SCHEMA = {
   accent: { type: 'color', value: '#e2b24f', label: 'Akzentfarbe', group: 'Text' },
   captionPos: { type: 'select', options: ['unten links', 'unten mitte', 'oben links'], value: 'unten links', label: 'Position', group: 'Text' },
   captionDelay: { type: 'number', min: 0, max: 5, step: .1, value: .6, label: 'Bauchbinde ab (s)', group: 'Text' },
-  subtitles: { type: 'boolean', value: false, label: 'Skripttext als Untertitel', group: 'Text' },
-  subtitleSize: { type: 'number', min: .4, max: 2, step: .05, value: 1, label: 'Untertitel Größe', group: 'Text' },
+  subtitles: { type: 'boolean', value: false, label: 'Skripttext als Untertitel', group: 'Untertitel' },
+  subtitleMode: { type: 'select', options: ['Ganzer Text', 'Satzweise (über die Szene verteilt)', 'Wortweise (Schreibmaschine)'], value: 'Ganzer Text', label: 'Anzeige', group: 'Untertitel' },
+  subtitleStart: { type: 'number', min: 0, max: 10, step: .1, value: 0, label: 'Ab (s)', group: 'Untertitel' },
+  subtitleEndGap: { type: 'number', min: 0, max: 10, step: .1, value: 0, label: 'Bis (s vor Szenenende)', group: 'Untertitel' },
+  subtitleFade: { type: 'number', min: 0, max: 2, step: .05, value: .25, label: 'Ein-/Ausblenden (s)', group: 'Untertitel' },
+  subtitleSize: { type: 'number', min: .4, max: 3, step: .05, value: 1, label: 'Größe', group: 'Untertitel' },
+  subtitleFont: { type: 'select', options: ['wie Bauchbinde', 'Inter', 'Cormorant Garamond', 'Georgia', 'Arial', 'Courier New', 'VT323'], value: 'wie Bauchbinde', label: 'Schrift', group: 'Untertitel' },
+  subtitleWeight: { type: 'select', options: ['400', '500', '600', '700'], value: '500', label: 'Schriftstärke', group: 'Untertitel' },
+  subtitleItalic: { type: 'boolean', value: false, label: 'Kursiv', group: 'Untertitel' },
+  subtitleUpper: { type: 'boolean', value: false, label: 'GROSSBUCHSTABEN', group: 'Untertitel' },
+  subtitleColor: { type: 'color', value: '#ffffff', label: 'Textfarbe', group: 'Untertitel' },
+  subtitleStyle: { type: 'select', options: ['Box je Zeile', 'Box um alles', 'Kontur', 'Schatten', 'Ohne'], value: 'Box je Zeile', label: 'Hintergrund', group: 'Untertitel' },
+  subtitleBg: { type: 'color', value: '#0a0c10', label: 'Box-/Konturfarbe', group: 'Untertitel' },
+  subtitleBgOpacity: { type: 'number', min: 0, max: 1, step: .05, value: .6, label: 'Box Deckkraft', group: 'Untertitel' },
+  subtitlePad: { type: 'number', min: 0, max: 3, step: .05, value: 1, label: 'Box Innenabstand', group: 'Untertitel' },
+  subtitleOutline: { type: 'number', min: 0, max: 12, step: .5, value: 4, label: 'Konturstärke (px)', group: 'Untertitel' },
+  subtitlePos: { type: 'select', options: ['unten', 'oben', 'mitte'], value: 'unten', label: 'Position', group: 'Untertitel' },
+  subtitleAlign: { type: 'select', options: ['mitte', 'links', 'rechts'], value: 'mitte', label: 'Ausrichtung', group: 'Untertitel' },
+  subtitleMargin: { type: 'number', min: 0, max: 400, step: 5, value: 60, label: 'Abstand zum Rand (px bei 1080p)', group: 'Untertitel' },
+  subtitleWidth: { type: 'number', min: .2, max: 1, step: .01, value: .7, label: 'Max. Breite (Anteil)', group: 'Untertitel' },
+  subtitleLineHeight: { type: 'number', min: .9, max: 2.5, step: .05, value: 1.3, label: 'Zeilenabstand', group: 'Untertitel' },
   exportFormat: { type: 'select', options: ['MP4 (H.264, bildgenau)', 'PNG-Sequenz', 'WebM (Echtzeit-Aufnahme)'], value: 'MP4 (H.264, bildgenau)', label: 'Format', group: 'Export' },
   fps: { type: 'select', options: ['24', '25', '30', '50', '60'], value: '30', label: 'Bilder/s', group: 'Export' },
   bitrate: { type: 'number', min: 2, max: 80, step: 1, value: 20, label: 'Bitrate (Mbit/s)', group: 'Export' }
@@ -197,6 +216,60 @@ function wrap(text, maxWidth) {
   for (const w of words) { const test = line ? line + ' ' + w : w; if (ctx.measureText(test).width > maxWidth && line) { lines.push(line); line = w; } else line = test; }
   if (line) lines.push(line); return lines;
 }
+// Untertitel: Text (ganz, satzweise oder wortweise) im Zeitfenster [Ab, Ende − Bis] mit Blende, Stil und Position aus „Untertitel“
+function subtitleChunk(text, t, t0, t1) {
+  const g = global, mode = g.subtitleMode;
+  if (t < t0 || t > t1) return null;
+  const fade = g.subtitleFade, env = (a, b) => Math.min(fade ? H.span(t, a, a + fade) : 1, fade ? H.span(b - t, 0, fade) : 1);
+  if (mode.startsWith('Satzweise')) {
+    const parts = text.match(/[^.!?…]+[.!?…]+["“”»«)]*|[^.!?…]+$/g)?.map(x => x.trim()).filter(Boolean) || [text];
+    const total = parts.reduce((n, x) => n + x.length + 12, 0), span = t1 - t0;
+    let a = t0;
+    for (const x of parts) { const b = a + span * (x.length + 12) / total; if (t <= b) return { text: x, alpha: env(a, b) }; a = b; }
+    return null;
+  }
+  if (mode.startsWith('Wortweise')) {
+    const words = text.split(/\s+/), k = Math.min(words.length, Math.floor(H.span(t, t0, t0 + (t1 - t0) * .85) * words.length) + 1);
+    return { text: words.slice(0, k).join(' '), alpha: fade ? H.span(t1 - t, 0, fade) * H.span(t, t0, t0 + fade) : 1 };
+  }
+  return { text, alpha: env(t0, t1) };
+}
+function hexA(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`; }
+function drawSubtitles(t, p, s, lb) {
+  const g = global, dur = p.duration;
+  const c = subtitleChunk(p.subtitle, t, g.subtitleStart, dur - g.subtitleEndGap);
+  if (!c || !c.text || c.alpha <= 0) return;
+  const text = g.subtitleUpper ? c.text.toUpperCase() : c.text;
+  const size = 34 * s * g.subtitleSize;
+  const fam = g.subtitleFont === 'wie Bauchbinde' ? fontFor(size, g.subtitleWeight).replace(/^\d+ [\d.]+px /, '') :
+    g.subtitleFont === 'Inter' ? "'Inter', Arial, sans-serif" : g.subtitleFont === 'VT323' ? "'VT323', 'Courier New', monospace" : `'${g.subtitleFont}', serif`;
+  ctx.save();
+  ctx.globalAlpha = c.alpha;
+  ctx.font = `${g.subtitleItalic ? 'italic ' : ''}${g.subtitleWeight} ${size}px ${fam}`;
+  // Zeilen nach dem vollen Satz umbrechen (Wortweise: Umbruch bleibt beim Tippen stabil)
+  const maxW = W * g.subtitleWidth, lines = wrap(text, maxW);
+  const lh = size * g.subtitleLineHeight, m = g.subtitleMargin * s, pad = 16 * s * g.subtitlePad, padY = 4 * s * g.subtitlePad;
+  const blockH = lines.length * lh;
+  const y0 = g.subtitlePos === 'oben' ? lb + m : g.subtitlePos === 'mitte' ? (Hh - blockH) / 2 : Hh - lb - m - blockH;
+  const align = g.subtitleAlign === 'links' ? 'left' : g.subtitleAlign === 'rechts' ? 'right' : 'center';
+  const x = align === 'left' ? (W - maxW) / 2 : align === 'right' ? (W + maxW) / 2 : W / 2;
+  const left = w => align === 'left' ? x : align === 'right' ? x - w : x - w / 2;
+  ctx.textAlign = align; ctx.textBaseline = 'top';
+  const style = g.subtitleStyle, bg = hexA(g.subtitleBg, g.subtitleBgOpacity);
+  if (style === 'Box um alles') {
+    const w = Math.max(...lines.map(l => ctx.measureText(l).width));
+    ctx.fillStyle = bg; ctx.fillRect(left(w) - pad, y0 - padY - 4 * s, w + 2 * pad, blockH + 2 * padY + 4 * s);
+  }
+  lines.forEach((l, i) => {
+    const y = y0 + i * lh, w = ctx.measureText(l).width;
+    if (style === 'Box je Zeile') { ctx.fillStyle = bg; ctx.fillRect(left(w) - pad, y - padY, w + 2 * pad, lh + 2 * padY - 4 * s * g.subtitlePad); }
+    if (style === 'Kontur' && g.subtitleOutline > 0) { ctx.lineJoin = 'round'; ctx.lineWidth = g.subtitleOutline * 2 * s; ctx.strokeStyle = g.subtitleBg; ctx.strokeText(l, x, y + 2 * s); }
+    if (style === 'Schatten') { ctx.shadowColor = hexA(g.subtitleBg, Math.max(.3, g.subtitleBgOpacity)); ctx.shadowBlur = 10 * s; ctx.shadowOffsetX = 2 * s; ctx.shadowOffsetY = 3 * s; }
+    ctx.fillStyle = g.subtitleColor; ctx.fillText(l, x, y + 2 * s);
+    ctx.shadowColor = 'transparent';
+  });
+  ctx.restore();
+}
 function composite(t) {
   const p = active.params, dur = p.duration;
   ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
@@ -238,18 +311,7 @@ function composite(t) {
       }
     }
   }
-  if (!global.textOff && global.subtitles && p.subtitle) {
-    const size = 34 * s * global.subtitleSize;
-    ctx.font = fontFor(size, 500);
-    const lines = wrap(p.subtitle, W * .7);
-    const lh = size * 1.3, y0 = Hh - lb - 60 * s - lines.length * lh;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    lines.forEach((l, i) => {
-      const w = ctx.measureText(l).width;
-      ctx.fillStyle = 'rgba(10,12,16,.6)'; ctx.fillRect(W / 2 - w / 2 - 16 * s, y0 + i * lh - 4 * s, w + 32 * s, lh);
-      ctx.fillStyle = '#ffffff'; ctx.fillText(l, W / 2, y0 + i * lh + 2 * s);
-    });
-  }
+  if (!global.textOff && global.subtitles && p.subtitle) drawSubtitles(t, p, s, lb);
   if (global.vignette > 0) {
     if (!vignetteCache) {
       vignetteCache = ctx.createRadialGradient(W / 2, Hh / 2, Math.min(W, Hh) * .35, W / 2, Hh / 2, Math.hypot(W, Hh) * .6);

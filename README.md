@@ -92,6 +92,16 @@ roten Flächen für gegnerisches Gebiet, gesperrten Ländernamen und leuchtenden
 „Global → Bild / Look / Text“ einstellbar, der frühere helle Comic-Look ist über Shading „toon“,
 Abdunkeln 0 und Bloom 0 wieder erreichbar.
 
+## Untertitel
+
+„Global → Untertitel“ zeigt den Skripttext der Szene („Szene → Untertitel / Skript“) als Untertitel. Einstellbar:
+- **Anzeige:** ganzer Text, satzweise (die Sätze teilen sich die Szene nach Länge auf) oder wortweise (Schreibmaschine)
+- **Zeitfenster:** Ab (s), Bis (s vor Szenenende), Ein-/Ausblenden
+- **Schrift:** wie Bauchbinde oder eigene (Inter, Cormorant Garamond, Georgia, Arial, Courier New, VT323), Größe,
+  Schriftstärke, kursiv, Großbuchstaben, Textfarbe, Zeilenabstand
+- **Hintergrund:** Box je Zeile, eine Box um alles, Kontur, Schatten oder ohne; Farbe, Deckkraft, Innenabstand, Konturstärke
+- **Lage:** unten, oben oder mitte; Ausrichtung mitte, links oder rechts; Abstand zum Rand; maximale Breite
+
 ## VHS-Filter
 
 „Global → Look → VHS-Filter“ (Standard: aus) legt als letzter Schritt einen Videokassetten-Look über das fertige
