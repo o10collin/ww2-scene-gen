@@ -50,9 +50,9 @@ const GLOBAL_SCHEMA = {
   captionDelay: { type: 'number', min: 0, max: 5, step: .1, value: .6, label: 'Bauchbinde ab (s)', group: 'Text' },
   subtitles: { type: 'boolean', value: false, label: 'Skripttext als Untertitel', group: 'Untertitel' },
   subtitleMode: { type: 'select', options: ['Ganzer Text', 'Satzweise (über die Szene verteilt)', 'Wortweise (Schreibmaschine)'], value: 'Ganzer Text', label: 'Anzeige', group: 'Untertitel' },
-  subtitleStart: { type: 'number', min: 0, max: 10, step: .1, value: 0, label: 'Ab (s)', group: 'Untertitel' },
+  subtitleStart: { type: 'number', min: 0, max: 10, step: .1, value: .6, label: 'Ab (s)', group: 'Untertitel' },
   subtitleEndGap: { type: 'number', min: 0, max: 10, step: .1, value: 0, label: 'Bis (s vor Szenenende)', group: 'Untertitel' },
-  subtitleFade: { type: 'number', min: 0, max: 2, step: .05, value: .25, label: 'Ein-/Ausblenden (s)', group: 'Untertitel' },
+  subtitleFade: { type: 'number', min: 0, max: 2, step: .05, value: .5, label: 'Ein-/Ausblenden (s)', group: 'Untertitel' },
   subtitleSize: { type: 'number', min: .4, max: 3, step: .05, value: 1, label: 'Größe', group: 'Untertitel' },
   subtitleFont: { type: 'select', options: ['wie Bauchbinde', 'Inter', 'Cormorant Garamond', 'Georgia', 'Arial', 'Courier New', 'VT323'], value: 'wie Bauchbinde', label: 'Schrift', group: 'Untertitel' },
   subtitleWeight: { type: 'select', options: ['400', '500', '600', '700'], value: '500', label: 'Schriftstärke', group: 'Untertitel' },
@@ -81,6 +81,11 @@ try { if (localStorage.getItem(LS + 'version') !== LOOK_VERSION) { localStorage.
 const global = {};
 for (const [k, s] of Object.entries(GLOBAL_SCHEMA)) global[k] = s.value;
 Object.assign(global, load('global'));
+// alte Untertitel-Standardwerte (Start 0 s, Blende 0,25 s: das Einblenden ging in der Schwarzblende unter) anheben
+try {
+  if (!localStorage.getItem(LS + 'mig.subFade') && global.subtitleStart === 0 && global.subtitleFade === .25) { global.subtitleStart = GLOBAL_SCHEMA.subtitleStart.value; global.subtitleFade = GLOBAL_SCHEMA.subtitleFade.value; }
+  localStorage.setItem(LS + 'mig.subFade', '1');
+} catch { /* kein Speicher */ }
 
 function load(key) { try { return JSON.parse(localStorage.getItem(LS + key) || '{}'); } catch { return {}; } }
 function save(key, obj) { try { localStorage.setItem(LS + key, JSON.stringify(obj)); } catch { /* Speicher nicht verfügbar */ } }
