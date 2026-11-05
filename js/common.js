@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { COUNTRIES } from './geo-world.js';
 
 export const P = {
   ink: '#23262d', paper: '#e9e1cf', night: '#141923', sky: '#a7bfcf', dawn: '#e9a97b', dusk: '#6b5b7b',
@@ -35,6 +36,7 @@ export function rng(seed) {
   };
 }
 export const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+export const smoothstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const smooth = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
 export const easeOut = t => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
@@ -942,38 +944,116 @@ export function europeMap({ scale = 0.9, land = '#767b82', sea = '#262a2e', high
   return g;
 }
 
-// Globus mit abstrakten Landflecken
+// Globus mit echten Küsten und Ländergrenzen (Natural Earth 1:110m, js/geo-world.js), als abgewickelte Textur
+// (Plattkarte) auf einer glatten Kugel. latLon() und die Texturkoordinaten der SphereGeometry passen zueinander:
+// u = (Länge + 180) / 360, v = (90 − Breite) / 180 (Leinwand von oben nach unten).
 export function latLon(lat, lon, R) {
   const phi = (90 - lat) * Math.PI / 180, theta = (lon + 180) * Math.PI / 180;
   return new THREE.Vector3(-R * Math.sin(phi) * Math.cos(theta), R * Math.cos(phi), R * Math.sin(phi) * Math.sin(theta));
 }
-const LAND = [[45, -100, 1.1], [35, -112, .7], [55, -80, .8], [30, -92, .6], [62, -105, .7], [20, -100, .45], [8, -72, .5], [-8, -58, .9], [-25, -62, .7], [-40, -68, .4], [5, 20, 1.0], [-12, 25, .8], [25, 10, .9], [-28, 24, .5], [50, 20, .8], [55, 45, 1.0], [45, 70, 1.0], [60, 100, 1.1], [45, 105, .9], [65, 130, .9], [25, 80, .55], [30, 105, .7], [22, 100, .4], [36, 138, .3], [-25, 135, .85], [64, -42, .5]];
-export function globe(R = 5, { ocean = '#0e1520', land = '#6a6f76', grid = true } = {}) {
-  const g = new THREE.Group();
-  const s = sphere(R, ocean, 48); s.castShadow = false; g.add(s);
-  for (const [lat, lon, k] of LAND) {
-    const r = k * R * .32;
-    const b = new THREE.Mesh(lowPoly ? new THREE.IcosahedronGeometry(r, 1) : new THREE.SphereGeometry(r, 14, 10), new THREE.MeshBasicMaterial({ color: land, map: terrainTexture() }));
-    b.position.copy(latLon(lat, lon, R - r * .82)); b.castShadow = false; g.add(b);
+export const countryIds = name => COUNTRIES.filter(c => c[1] === name).map(c => c[0]);
+function tracePolys(g, polys, W, Hh) {
+  for (const poly of polys) for (const ring of poly) {
+    for (let i = 0; i < ring.length; i += 2) {
+      const x = (ring[i] / 10 + 180) / 360 * W, y = (90 - ring[i + 1] / 10) / 180 * Hh;
+      if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+    }
+    g.closePath();
   }
+}
+const GLOBE_TEX = {};
+function globeTexture({ ocean, land, borders, coast, grid, W = 4096 }) {
+  const key = [ocean, land, borders, coast, grid, W].join('|');
+  if (GLOBE_TEX[key]) return GLOBE_TEX[key];
+  const Hh = W / 2, c = document.createElement('canvas'); c.width = W; c.height = Hh;
+  const g = c.getContext('2d'), k = W / 4096;
+  // Ozean mit leichter Tiefenstruktur
+  g.fillStyle = ocean; g.fillRect(0, 0, W, Hh);
+  const tt = terrainTexture().image;
+  g.save(); g.globalAlpha = .18; g.globalCompositeOperation = 'soft-light'; g.fillStyle = g.createPattern(tt, 'repeat'); g.fillRect(0, 0, W, Hh); g.restore();
+  // Gradnetz
   if (grid) {
-    const w = new THREE.Mesh(new THREE.SphereGeometry(R * 1.002, 24, 12), new THREE.MeshBasicMaterial({ color: '#ffffff', wireframe: true, transparent: true, opacity: .12 }));
-    g.add(w);
+    g.strokeStyle = 'rgba(255,255,255,.07)'; g.lineWidth = 1.5 * k; g.beginPath();
+    for (let lon = -180; lon <= 180; lon += 15) { const x = (lon + 180) / 360 * W; g.moveTo(x, 0); g.lineTo(x, Hh); }
+    for (let lat = -75; lat <= 75; lat += 15) { const y = (90 - lat) / 180 * Hh; g.moveTo(0, y); g.lineTo(W, y); }
+    g.stroke();
   }
+  // Land: Grundfarbe, Geländerauschen, Küstensaum, Ländergrenzen
+  g.beginPath(); for (const cn of COUNTRIES) tracePolys(g, cn[2], W, Hh);
+  g.save(); g.shadowColor = 'rgba(0,0,0,.55)'; g.shadowBlur = 10 * k; g.fillStyle = land; g.fill('evenodd'); g.restore();
+  g.save(); g.clip('evenodd'); g.globalAlpha = .35; g.globalCompositeOperation = 'overlay'; g.fillStyle = g.createPattern(tt, 'repeat'); g.fillRect(0, 0, W, Hh); g.restore();
+  if (borders) { g.strokeStyle = borders; g.lineWidth = 1.6 * k; g.lineJoin = 'round'; for (const cn of COUNTRIES) { g.beginPath(); tracePolys(g, cn[2], W, Hh); g.stroke(); } }
+  if (coast) { g.beginPath(); for (const cn of COUNTRIES) tracePolys(g, cn[2], W, Hh); g.strokeStyle = coast; g.lineWidth = 2.4 * k; g.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; t.needsUpdate = true;
+  GLOBE_TEX[key] = t; return t;
+}
+// Ländermaske (weiß auf transparent) für Hervorhebungen
+const MASK_TEX = {};
+function countryMask(ids, W = 2048) {
+  const key = ids.join(',') + '|' + W;
+  if (MASK_TEX[key]) return MASK_TEX[key];
+  const Hh = W / 2, c = document.createElement('canvas'); c.width = W; c.height = Hh;
+  const g = c.getContext('2d');
+  g.beginPath(); for (const cn of COUNTRIES) if (ids.includes(cn[0]) || ids.includes(cn[1])) tracePolys(g, cn[2], W, Hh);
+  g.fillStyle = 'rgba(255,255,255,.78)'; g.fill('evenodd');
+  g.strokeStyle = '#ffffff'; g.lineWidth = 3 * W / 2048; g.lineJoin = 'round'; g.stroke();
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; t.needsUpdate = true;
+  MASK_TEX[key] = t; return t;
+}
+export function globe(R = 5, { ocean = '#0e1520', land = '#6a6f76', grid = true, borders = 'rgba(235,238,244,.42)', coast = 'rgba(255,255,255,.22)' } = {}) {
+  const g = new THREE.Group();
+  const geo = new THREE.SphereGeometry(R, 128, 64); geo.userData.smooth = true;
+  const s = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: globeTexture({ ocean, land, borders, coast, grid }) }));
+  s.castShadow = s.receiveShadow = false; g.add(s);
+  // Atmosphärensaum
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(R * 1.07, 64, 32), new THREE.ShaderMaterial({
+    uniforms: { col: { value: new THREE.Color('#6f9fd8') } }, transparent: true, depthWrite: false, side: THREE.BackSide, blending: THREE.AdditiveBlending,
+    vertexShader: 'varying vec3 vN; varying vec3 vV; void main() { vec4 mv = modelViewMatrix * vec4(position, 1.); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }',
+    fragmentShader: 'uniform vec3 col; varying vec3 vN; varying vec3 vV; void main() { float d = clamp(-dot(vN, vV), 0., 1.); float f = smoothstep(.0, .55, d) * pow(1. - d, 1.6); gl_FragColor = vec4(col * f * .38, 1.); }'
+  }));
+  g.add(halo);
+  // Länder hervorheben: eigene Schicht knapp über der Oberfläche, Deckkraft über setAmount(0..1)
+  g.userData.highlight = (ids, color, strength = 1.25) => {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(R * 1.002, 128, 64), new THREE.MeshBasicMaterial({ map: countryMask(ids), transparent: true, depthWrite: false, opacity: 0 }));
+    m.material.color.set(color).multiplyScalar(strength); m.renderOrder = 2; m.visible = false;
+    m.userData.setAmount = a => { m.material.opacity = clamp(a, 0, 1); m.visible = a > .001; };
+    g.add(m); return m;
+  };
   g.userData.marker = (lat, lon, color, r = .18) => {
     const m = mesh(new THREE.SphereGeometry(r, 12, 8), color); m.castShadow = false;
     m.position.copy(latLon(lat, lon, R)); g.add(m); return m;
   };
-  g.userData.arc = (a, b, color, { lift = 1.4, radius = .07 } = {}) => {
+  // Bogen zwischen zwei Orten; wächst mit setProgress(0..1), ein leuchtender Kopf läuft an der Spitze mit
+  g.userData.arc = (a, b, color, { lift = 1.4, radius = .07, head = 0 } = {}) => {
     const p0 = latLon(a[0], a[1], R), p2 = latLon(b[0], b[1], R);
     const mid = p0.clone().add(p2).multiplyScalar(.5).normalize().multiplyScalar(R * lift);
     const curve = new THREE.QuadraticBezierCurve3(p0, mid, p2);
-    const geo = new THREE.TubeGeometry(curve, 48, radius, 6, false);
+    const geo = new THREE.TubeGeometry(curve, 64, radius, 6, false);
     const m = new THREE.Mesh(geo, glowMat(color, 1.8));
-    m.userData.total = geo.index.count;
-    m.userData.setProgress = u => { geo.setDrawRange(0, Math.floor(m.userData.total * clamp(u, 0, 1))); m.visible = u > 0; };
+    m.userData.total = geo.index.count; m.userData.curve = curve;
+    const hd = head > 0 ? new THREE.Mesh(new THREE.SphereGeometry(head, 12, 8), glowMat(color, 3)) : null;
+    if (hd) g.add(hd);
+    m.userData.setProgress = u => {
+      u = clamp(u, 0, 1);
+      geo.setDrawRange(0, Math.floor(m.userData.total * u) - Math.floor(m.userData.total * u) % 6); m.visible = u > 0;
+      if (hd) { hd.visible = u > 0 && u < 1; curve.getPoint(u, hd.position); }
+    };
     m.userData.setProgress(0);
     g.add(m); return m;
+  };
+  // Beschriftung nur auf der zugewandten Seite zeigen (weich ausblenden zum Rand hin); show(0..1) zusätzlich von außen
+  g.userData.label = (text, lat, lon, opts = {}) => {
+    const { lift = 1.16, size = .5, ...rest } = opts;
+    const l = label(text, { size, color: '#f4f1ea', bg: 'rgba(14,18,26,.72)', depth: false, ...rest });
+    const n = latLon(lat, lon, 1), wp = new THREE.Vector3(), cp = new THREE.Vector3();
+    l.position.copy(n).multiplyScalar(R * lift); g.add(l);
+    l.userData.show = 0;
+    l.onBeforeRender = (r, sc, cam) => {
+      l.getWorldPosition(wp); g.getWorldPosition(cp);
+      const facing = wp.sub(cp).normalize().dot(cam.position.clone().sub(cp).normalize());
+      l.material.opacity = l.userData.show * smoothstep(.2, .45, facing);
+    };
+    return l;
   };
   g.userData.R = R;
   return g;

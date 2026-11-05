@@ -177,7 +177,9 @@ Parameter ohne `live: true` lösen beim Ändern einen Neuaufbau der Szene aus; `
 bildgenau reproduzierbar bleibt.
 
 `js/common.js` enthält die Bausteine: Figuren, Panzer, Flugzeuge, Schiffe, Landungsboote, Gebäude,
-Ruinen, Städte, Bäume, Wolken, Pfeile, Europakarte (`europeMap`), Globus mit Bögen (`globe`),
+Ruinen, Städte, Bäume, Wolken, Pfeile, Europakarte (`europeMap`), Globus mit echten Küsten, Ländergrenzen,
+Atmosphärensaum, Länderhervorhebung (`highlight`), Bögen mit Leuchtkopf und rückseitig ausblendenden Beschriftungen (`globe`;
+Daten: Natural Earth 1:110m, gemeinfrei, über world-atlas 2.0.2 in `js/geo-world.js`),
 Explosionen (`explosion` klein, `fireball` groß), Dauerbrände (`flame`), Wassersäulen (`waterColumn`) und Rauchsäulen
 (`smokeColumn`). Im Low-Poly-Look sind das kantige, verformte Polyeder mit eigener Helligkeit je Facette (`fireballLP` usw.),
 sonst weiche Sprite-Partikelsysteme (`emitter`, `fireballSoft` usw.). Beide laufen deterministisch aus dem Alter,
