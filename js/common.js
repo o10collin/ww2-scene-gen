@@ -952,12 +952,35 @@ export function latLon(lat, lon, R) {
   return new THREE.Vector3(-R * Math.sin(phi) * Math.cos(theta), R * Math.cos(phi), R * Math.sin(phi) * Math.sin(theta));
 }
 export const countryIds = name => COUNTRIES.filter(c => c[1] === name).map(c => c[0]);
+// Ring über die Datumsgrenze hinweg stetig machen (Längen „abwickeln“); Ringe, die einen Pol umschließen (Antarktis),
+// werden über den Pol geschlossen. Jeder Ring wird dreimal gezeichnet (−360°, 0°, +360°), damit Teile jenseits der
+// Kartenränder auf der anderen Seite erscheinen.
+const RING_CACHE = new WeakMap();
+function unwrapRing(ring) {
+  if (RING_CACHE.has(ring)) return RING_CACHE.get(ring);
+  const pts = [];
+  let prev = null, off = 0;
+  for (let i = 0; i < ring.length; i += 2) {
+    let lon = ring[i] / 10; const lat = ring[i + 1] / 10;
+    if (prev !== null) { const d = lon + off - prev; if (d > 180) off -= 360; else if (d < -180) off += 360; }
+    lon += off; pts.push([lon, lat]); prev = lon;
+  }
+  const first = pts[0], last = pts[pts.length - 1];
+  let d = first[0] - last[0]; d -= 360 * Math.round(d / 360);
+  const net = last[0] + d - first[0];
+  if (Math.abs(net) > 180) {                                                        // umschließt einen Pol
+    const meanLat = pts.reduce((a, q) => a + q[1], 0) / pts.length, pole = meanLat < 0 ? -90 : 90;
+    pts.push([last[0] + d, first[1]], [last[0] + d, pole], [first[0], pole]);
+  }
+  RING_CACHE.set(ring, pts); return pts;
+}
 function tracePolys(g, polys, W, Hh) {
-  for (const poly of polys) for (const ring of poly) {
-    for (let i = 0; i < ring.length; i += 2) {
-      const x = (ring[i] / 10 + 180) / 360 * W, y = (90 - ring[i + 1] / 10) / 180 * Hh;
+  for (const shift of [-360, 0, 360]) for (const poly of polys) for (const ring of poly) {
+    const pts = unwrapRing(ring);
+    pts.forEach(([lon, lat], i) => {
+      const x = (lon + shift + 180) / 360 * W, y = (90 - lat) / 180 * Hh;
       if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
-    }
+    });
     g.closePath();
   }
 }
@@ -979,9 +1002,11 @@ function globeTexture({ ocean, land, borders, coast, grid, W = 4096 }) {
     g.stroke();
   }
   // Land: Grundfarbe, Geländerauschen, Küstensaum, Ländergrenzen
+  g.save(); g.shadowColor = 'rgba(0,0,0,.55)'; g.shadowBlur = 10 * k; g.fillStyle = land;
+  for (const cn of COUNTRIES) { g.beginPath(); tracePolys(g, cn[2], W, Hh); g.fill('evenodd'); }
+  g.restore();
   g.beginPath(); for (const cn of COUNTRIES) tracePolys(g, cn[2], W, Hh);
-  g.save(); g.shadowColor = 'rgba(0,0,0,.55)'; g.shadowBlur = 10 * k; g.fillStyle = land; g.fill('evenodd'); g.restore();
-  g.save(); g.clip('evenodd'); g.globalAlpha = .35; g.globalCompositeOperation = 'overlay'; g.fillStyle = g.createPattern(tt, 'repeat'); g.fillRect(0, 0, W, Hh); g.restore();
+  g.save(); g.clip('nonzero'); g.globalAlpha = .35; g.globalCompositeOperation = 'overlay'; g.fillStyle = g.createPattern(tt, 'repeat'); g.fillRect(0, 0, W, Hh); g.restore();
   if (borders) { g.strokeStyle = borders; g.lineWidth = 1.6 * k; g.lineJoin = 'round'; for (const cn of COUNTRIES) { g.beginPath(); tracePolys(g, cn[2], W, Hh); g.stroke(); } }
   if (coast) { g.beginPath(); for (const cn of COUNTRIES) tracePolys(g, cn[2], W, Hh); g.strokeStyle = coast; g.lineWidth = 2.4 * k; g.stroke(); }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; t.needsUpdate = true;
@@ -994,9 +1019,8 @@ function countryMask(ids, W = 2048) {
   if (MASK_TEX[key]) return MASK_TEX[key];
   const Hh = W / 2, c = document.createElement('canvas'); c.width = W; c.height = Hh;
   const g = c.getContext('2d');
-  g.beginPath(); for (const cn of COUNTRIES) if (ids.includes(cn[0]) || ids.includes(cn[1])) tracePolys(g, cn[2], W, Hh);
-  g.fillStyle = 'rgba(255,255,255,.78)'; g.fill('evenodd');
-  g.strokeStyle = '#ffffff'; g.lineWidth = 3 * W / 2048; g.lineJoin = 'round'; g.stroke();
+  g.fillStyle = 'rgba(255,255,255,.78)'; g.strokeStyle = '#ffffff'; g.lineWidth = 3 * W / 2048; g.lineJoin = 'round';
+  for (const cn of COUNTRIES) if (ids.includes(cn[0]) || ids.includes(cn[1])) { g.beginPath(); tracePolys(g, cn[2], W, Hh); g.fill('evenodd'); g.stroke(); }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; t.needsUpdate = true;
   MASK_TEX[key] = t; return t;
 }
