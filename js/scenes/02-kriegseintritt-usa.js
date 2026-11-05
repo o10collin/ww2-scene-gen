@@ -12,7 +12,7 @@ export default {
   script: 'Dies führt dazu, dass die Vereinigten Staaten ihre Neutralität aufgeben und in den Zweiten Weltkrieg eintreten. Deutschland und Italien erklären ihnen kurz darauf den Krieg.',
   caption: { title: 'Die USA treten in den Krieg ein', sub: 'Dezember 1941' },
   params: {
-    globeSize: { type: 'number', min: 2, max: 6, step: .05, value: 3.6, label: 'Globus Radius' },
+    globeSize: { type: 'number', min: 2, max: 6, step: .05, value: 4.3, label: 'Globus Radius' },
     rotOffset: { type: 'number', min: -180, max: 180, step: 1, value: 0, label: 'Drehung Korrektur (°)' },
     rotSpeed: { type: 'number', min: 0, max: 10, step: .1, value: 1.5, label: 'Grunddrehung (°/s)' },
     tilt: { type: 'number', min: -45, max: 45, step: 1, value: 16, label: 'Neigung (°)' },
@@ -68,7 +68,7 @@ export default {
     L('Japan', [TOKIO[0] + 9, TOKIO[1] + 4], () => p.tAttack - .3);
     L('Pearl Harbor', [PEARL[0] - 8, PEARL[1]], () => p.tAttack + 1.2);
     L('USA', USA_C, () => p.tUSA + .3, { scale: 1.25 });
-    L('Deutschland', [BERLIN[0] + 7, BERLIN[1] - 4], () => p.tDeclare);
+    L('Deutschland', [BERLIN[0] + 2, BERLIN[1] + 13], () => p.tDeclare);
     L('Italien', [ROM[0] - 6, ROM[1] + 6], () => p.tDeclare + .4);
     if (p.labels && p.dates) {
       const dateStyle = { style: { font: "italic 500 60px 'Cormorant Garamond', Georgia, serif", bg: null, color: '#e9d7b4' } };
