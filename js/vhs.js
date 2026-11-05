@@ -1,7 +1,7 @@
 // VHS-Filter: läuft als letzter Schritt über das fertige 2D-Bild (inkl. Texte, Vignette, Blenden),
 // damit Vorschau und Export identisch aussehen. Deterministisch aus der Szenenzeit t (bildgenauer Export).
-// Nachgebildet: geringe Luma-Auflösung mit Kantenüberschwingen, verschmierte und versetzte Farbe (Chroma-Delay),
-// Zeilenzittern, Kopfumschalt-Störung am unteren Rand, wandernder Tracking-Streifen, Dropouts, Zeilenstruktur, Rauschen.
+// Nachgebildet: weiches Bild (geringe Bandauflösung), RGB-Versatz zum Rand hin stärker, Geisterbild, entsättigte kühle
+// dunkle Farben, horizontale Rauschstreifen, leichtes Zeilenzittern, Zeilenstruktur, Randabdunklung, seltene Dropouts.
 import * as THREE from 'three';
 
 const FRAG = /* glsl */`
@@ -11,53 +11,53 @@ uniform float time, frame, strength;
 varying vec2 vUv;
 float hash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 float vnoise(float x) { float i = floor(x), f = fract(x); return mix(hash(vec2(i, 1.3)), hash(vec2(i + 1., 1.3)), f * f * (3. - 2. * f)); }
-vec3 toYIQ(vec3 c) { return vec3(dot(c, vec3(.299, .587, .114)), dot(c, vec3(.596, -.274, -.322)), dot(c, vec3(.211, -.523, .312))); }
-vec3 toRGB(vec3 c) { return vec3(c.x + .956 * c.y + .621 * c.z, c.x - .272 * c.y - .647 * c.z, c.x - 1.106 * c.y + 1.703 * c.z); }
+// weiche Unschärfe: 7 Abtastungen horizontal × 3 vertikal (Band-Auflösung ist horizontal deutlich geringer)
+vec3 soft(vec2 p, vec2 px) {
+  vec3 c = vec3(0.);
+  for (int j = -1; j <= 1; j++) for (int i = -3; i <= 3; i++) {
+    float w = (4. - abs(float(i))) * (2. - abs(float(j)));
+    c += texture2D(tDiffuse, p + vec2(float(i) * px.x, float(j) * px.y)).rgb * w;
+  }
+  return c / 64.;
+}
 void main() {
   float s = strength, s1 = min(s, 1.);
-  float sc = res.y / 1080.;                 // 1 px bei 1080p
-  float pxu = sc / res.x;                   // dieser Pixel in UV (horizontal)
-  float top = 1. - vUv.y;                   // 0 = oberer Rand
-  float line = floor(top * 540.);           // 540 Halbbildzeilen
-  // Zeilenzittern und langsames Wabern
-  float jit = (hash(vec2(line, frame)) - .5) * 1.4 * s;
-  jit += sin(top * 11. + time * 1.7) * .7 * s + (vnoise(time * 2.3) - .5) * 2. * s;
-  // Kopfumschaltung: unterste Zeilen stark nach rechts verzogen
-  float hs = smoothstep(.03, 0., vUv.y) * s1;
-  jit += hs * (14. + 26. * hash(vec2(line, frame + 3.)));
-  // Tracking-Streifen, wandert langsam von unten nach oben
-  float bandY = fract(time * .045 + .15);
-  float band = smoothstep(.018, 0., abs(top - bandY)) * s1;
-  jit += band * (hash(vec2(line, frame + 7.)) - .5) * 26.;
-  vec2 u = vec2(vUv.x - jit * pxu, vUv.y);
-  // Luma: schmale Unschärfe + Überschwingen an Kanten
-  float sp = .6 + .7 * s;
-  float Y = 0., Yb = 0.;
-  for (int i = -2; i <= 2; i++) Y += toYIQ(texture2D(tDiffuse, u + vec2(float(i) * sp * pxu, 0.)).rgb).x;
-  Y /= 5.;
-  for (int i = -4; i <= 4; i++) Yb += toYIQ(texture2D(tDiffuse, u + vec2(float(i) * 2.6 * pxu, 0.)).rgb).x;
-  Yb /= 9.;
-  Y += (Y - Yb) * .7 * s;
-  // Chroma: breit verschmiert, nach rechts versetzt, entsättigt
-  vec2 IQ = vec2(0.);
-  vec2 cu = u - vec2(5. * s * pxu, 0.);
-  for (int i = -6; i <= 6; i++) IQ += toYIQ(texture2D(tDiffuse, cu + vec2(float(i) * 2.2 * s * pxu, 0.)).rgb).yz;
-  IQ /= 13.;
-  IQ *= 1. - .22 * s1;
-  vec3 c = toRGB(vec3(Y, IQ));
-  // Bandmaterial: angehobene Schwärzen, weniger Kontrast, leicht warm
-  c = mix(c, c * vec3(1.03, 1., .93) * .9 + .04, s1);
-  // Zeilenstruktur
-  c *= 1. - .07 * s1 * (.5 + .5 * cos(top * 1080. * 3.14159265));
-  // Rauschen
-  c += (hash(vUv * res + frame * 17.3) - .5) * .07 * s;
-  // Schnee im Tracking-Streifen und an der Kopfumschaltung
-  float sn = hash(vec2(floor(vUv.x * res.x / (3. * sc)), line + frame * 13.));
-  c = mix(c, vec3(sn * 1.1), clamp((band * .35 + hs * .6) * step(.78, sn), 0., 1.));
-  // Dropouts: kurze helle Striche
-  if (hash(vec2(line, frame)) > 1. - .0018 * s) {
-    float x0 = hash(vec2(line, frame + 1.)), len = .015 + .07 * hash(vec2(line, frame + 2.));
-    c = mix(c, vec3(.92), smoothstep(len, 0., abs(vUv.x - x0)) * .85);
+  float sc = res.y / 1080.;
+  vec2 px = vec2(sc / res.x, sc / res.y);           // 1 px bei 1080p in UV
+  float top = 1. - vUv.y;
+  float row = floor(top * 1080.);
+  // leichtes Zeilenzittern und Wabern
+  float jit = (hash(vec2(floor(top * 540.), frame)) - .5) * .9 * s + sin(top * 9. + time * 1.4) * .5 * s + (vnoise(time * 2.1) - .5) * 1.2 * s;
+  vec2 u = vec2(vUv.x - jit * px.x, vUv.y);
+  vec2 bp = vec2((.55 + .45 * s) * px.x, .45 * px.y);
+  // RGB-Versatz, zum Rand hin stärker
+  float edge = length((vUv - .5) * vec2(1.6, 1.));
+  float ca = (4. + 3. * edge) * s * px.x;
+  vec3 c = vec3(soft(u + vec2(ca, 0.), bp).r, soft(u, bp).g, soft(u - vec2(ca, 0.), bp).b);
+  // Geisterbild leicht rechts versetzt
+  c = mix(c, texture2D(tDiffuse, u - vec2(11. * px.x, 0.)).rgb, .12 * s1);
+  // Farbe: entsättigt, kühl, flacher Kontrast, dunkler
+  float Y = dot(c, vec3(.299, .587, .114));
+  c = mix(c, mix(vec3(Y), c, .72) * vec3(.9, .96, 1.06), s1);
+  c = mix(c, ((c - .5) * .82 + .5) * .82 - .025, s1);
+  // horizontale Rauschstreifen (kurze helle/dunkle Striche, leicht farbig)
+  float xs = vUv.x * res.x / (sc * 46.), fx = fract(xs), ix = floor(xs), sm = fx * fx * (3. - 2. * fx);
+  vec3 st;
+  for (int k = 0; k < 3; k++) {
+    float o = float(k) * 17.1 + frame * 3.7;
+    st[k] = mix(hash(vec2(ix, row + o)), hash(vec2(ix + 1., row + o)), sm);
+  }
+  float stY = (st.r + st.g + st.b) / 3.;
+  c += ((stY - .5) * .05 + (st - .5) * .025) * s;
+  // feines Rauschen und Zeilenstruktur
+  c += (hash(vUv * res + frame * 17.3) - .5) * .035 * s;
+  c *= 1. - .05 * s1 * (.5 + .5 * cos(top * 1080. * 3.14159265));
+  // zusätzliche Randabdunklung wie bei einem Röhrenbild
+  c *= 1. - .4 * s1 * smoothstep(.35, 1.05, edge);
+  // seltene Dropouts
+  if (hash(vec2(row, frame)) > 1. - .0006 * s) {
+    float x0 = hash(vec2(row, frame + 1.)), len = .01 + .04 * hash(vec2(row, frame + 2.));
+    c = mix(c, vec3(.6), smoothstep(len, 0., abs(vUv.x - x0)) * .6);
   }
   gl_FragColor = vec4(clamp(c, 0., 1.), 1.);
 }`;

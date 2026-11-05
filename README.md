@@ -95,9 +95,9 @@ Abdunkeln 0 und Bloom 0 wieder erreichbar.
 ## VHS-Filter
 
 „Global → Look → VHS-Filter“ (Standard: aus) legt als letzter Schritt einen Videokassetten-Look über das fertige
-Bild, also auch über Bauchbinde und Untertitel: weiche Luma mit Kantenüberschwingen, verschmierte und nach rechts
-versetzte Farbe, Zeilenzittern, Kopfumschalt-Störung am unteren Rand, ein langsam wandernder Tracking-Streifen,
-vereinzelte Dropouts, Zeilenstruktur und Bandrauschen. „VHS Stärke“ (0,2–2) regelt alles gemeinsam,
+Bild, also auch über Bauchbinde und Untertitel: weiches Bild, kräftiger RGB-Versatz (zum Rand hin stärker), leichtes
+Geisterbild, entsättigte, kühle und dunklere Farben, feine horizontale Rauschstreifen, leichtes Zeilenzittern,
+Zeilenstruktur, Randabdunklung und seltene Dropouts. „VHS Stärke“ (0,2–2) regelt alles gemeinsam,
 „VHS-Einblendung“ blendet „PLAY ▶“ und ein Bandzählwerk ein (Schrift VT323). Der Filter hängt nur von der
 Szenenzeit ab und landet deshalb bildgenau im Export (Code: `js/vhs.js`).
 
