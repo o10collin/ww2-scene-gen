@@ -237,25 +237,55 @@ export async function preloadModels(onProgress) {
   CLIP_HIP_Y = tr ? [tr.values[0], tr.values[1], tr.values[2]] : null;
   const tq = ref?.tracks.find(t => t.name === 'Hips.quaternion');
   CLIP_HIP_Q = tq ? new THREE.Quaternion(tq.values[0], tq.values[1], tq.values[2], tq.values[3]) : null;
-  // Natürlicher Gang und Lauf aus dem three.js-Soldaten („Walk“, „Run“), umgerechnet in die Clip-Konvention:
-  // Präfix weg, Hüfte aus dem gedrehten Elternraum des Soldaten (z-up) in y-up und auf die Clip-Hüfthöhe skaliert.
-  const SM = MODELS.soldier;
-  if (SM) {
-    // zusätzlich 180° um die Hochachse: der Soldaten-Clip läuft sonst entgegen der Blickrichtung der übrigen Clips
-    const preQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI).multiply(SM.preInv.clone().invert()), k = CLIP_HIP_REST / SM.hipLen, v = new THREE.Vector3(), q = new THREE.Quaternion();
+  // Natürlicher Gang und Lauf aus dem three.js-Soldaten („Walk“, „Run“), auf das Mixamo-Rig der Zivilfiguren umgerechnet.
+  // Die Ruheposen beider Skelette unterscheiden sich (Hüfte, Oberschenkel, Wirbelsäule); ein bloßes Kopieren der lokalen
+  // Drehungen schnürt deshalb die Taille ein. Stattdessen je Knochen die Weltdrehung relativ zur Ruhepose übertragen:
+  // W_ziel = R · (W_soldat · W_soldat_ruhe⁻¹) · R⁻¹ · W_ziel_ruhe, R = 180° um die Hochachse (Soldat blickt entgegengesetzt).
+  const SM = MODELS.soldier, TM = MODELS.brian || Object.values(MODELS).find(m => m !== SM && !m.def.lowPoly);
+  if (SM && TM) {
+    const base = nm => nm.replace(/^mixamorig\d*:?/, '');
+    const preQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI).multiply(SM.preInv.clone().invert()), k = CLIP_HIP_REST / SM.hipLen, v = new THREE.Vector3();
+    const R = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI), Ri = R.clone().invert();
+    const sInst = SkeletonUtils.clone(SM.scene); sInst.updateMatrixWorld(true);
+    const sBones = {}, sRest = {};
+    sInst.traverse(o => { if (o.isBone) { sBones[base(o.name)] = o; sRest[base(o.name)] = o.getWorldQuaternion(new THREE.Quaternion()).invert(); } });
+    TM.scene.updateMatrixWorld(true);
+    const tBones = []; TM.scene.traverse(o => { if (o.isBone) tBones.push(o); });   // Eltern vor Kindern
+    const tRestW = new Map(tBones.map(b => [b, b.getWorldQuaternion(new THREE.Quaternion())]));
+    const tHipParentW = tBones[0].parent.getWorldQuaternion(new THREE.Quaternion());
     for (const [src, name] of [['Walk', 'Walk_Natural'], ['Run', 'Run_Natural']]) {
       const c0 = SM.clips.find(c => c.name === src); if (!c0 || CLIPS[name]) continue;
-      const c = c0.clone(); c.name = name;
-      c.tracks = c.tracks.filter(tr => {
-        const [bone, prop] = tr.name.split('.');
-        if (prop === 'scale' || (prop === 'position' && !bone.endsWith('Hips'))) return false;
-        const base = bone.replace(/^mixamorig\d*:?/, '');
-        tr.name = base + '.' + prop;
-        const a = tr.values;
-        if (base === 'Hips' && prop === 'position') for (let i = 0; i < a.length; i += 3) { v.set(a[i], a[i + 1], a[i + 2]).applyQuaternion(preQ).multiplyScalar(k); a[i] = v.x; a[i + 1] = v.y; a[i + 2] = v.z; }
-        if (base === 'Hips' && prop === 'quaternion') for (let i = 0; i < a.length; i += 4) { q.set(a[i], a[i + 1], a[i + 2], a[i + 3]).premultiply(preQ); a[i] = q.x; a[i + 1] = q.y; a[i + 2] = q.z; a[i + 3] = q.w; }
-        return true;
-      });
+      const mixer = new THREE.AnimationMixer(sInst); mixer.clipAction(c0).play();
+      const fps = 30, nf = Math.max(2, Math.round(c0.duration * fps) + 1), times = new Float32Array(nf);
+      const out = new Map(tBones.filter(b => sBones[base(b.name)]).map(b => [b, new Float32Array(nf * 4)]));
+      const W = new Map(), d = new THREE.Quaternion(), q = new THREE.Quaternion();
+      for (let f = 0; f < nf; f++) {
+        const t = Math.min(c0.duration, f / fps * (c0.duration / ((nf - 1) / fps))); times[f] = t;
+        mixer.setTime(t); sInst.updateMatrixWorld(true);
+        for (const b of tBones) {
+          const bn = base(b.name), sb = sBones[bn];
+          const parentW = W.get(b.parent) || (b.parent === tBones[0].parent ? tHipParentW : b.parent.getWorldQuaternion(new THREE.Quaternion()));
+          let w;
+          if (sb) { d.copy(sb.getWorldQuaternion(q)).multiply(sRest[bn]); w = R.clone().multiply(d).multiply(Ri).multiply(tRestW.get(b)); }
+          else w = parentW.clone().multiply(b.quaternion);
+          W.set(b, w);
+          const a = out.get(b); if (!a) continue;
+          // Hüfte in Clip-Konvention (clipFor stellt preInv voran): Weltdrehung; übrige Knochen lokal zum Elternknochen
+          const loc = b === tBones[0] ? w.clone() : parentW.clone().invert().multiply(w);
+          if (f > 0) { const p = f * 4 - 4; if (a[p] * loc.x + a[p + 1] * loc.y + a[p + 2] * loc.z + a[p + 3] * loc.w < 0) loc.set(-loc.x, -loc.y, -loc.z, -loc.w); }
+          a.set([loc.x, loc.y, loc.z, loc.w], f * 4);
+        }
+      }
+      mixer.stopAllAction(); mixer.uncacheRoot(sInst);
+      const tracks = [];
+      for (const [b, a] of out) tracks.push(new THREE.QuaternionKeyframeTrack(base(b.name) + '.quaternion', times, a));
+      const ph = c0.tracks.find(tr => /Hips\.position$/.test(tr.name));
+      if (ph) {
+        const a = ph.values.slice();
+        for (let i = 0; i < a.length; i += 3) { v.set(a[i], a[i + 1], a[i + 2]).applyQuaternion(preQ).multiplyScalar(k); a[i] = v.x; a[i + 1] = v.y; a[i + 2] = v.z; }
+        tracks.push(new THREE.VectorKeyframeTrack('Hips.position', ph.times.slice(), a));
+      }
+      const c = new THREE.AnimationClip(name, c0.duration, tracks);
       c.userData = { hipRest: CLIP_HIP_REST };
       CLIPS[name] = c;
       if (!CLIP_NAMES.includes(name)) CLIP_NAMES.push(name);
