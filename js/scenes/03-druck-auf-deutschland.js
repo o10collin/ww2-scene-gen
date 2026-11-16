@@ -26,10 +26,10 @@ const BRITAIN = [{ c: '826' }];
 
 // Druck von drei Seiten, als große flache Kartenpfeile bis an die Reichsgrenze: [Farbe, Start (s), Wegpunkte lon/lat]
 const ARROWS = [
-  ['west', 1.0, [[-1.5, 52.4], [2.5, 52.6], [5.6, 51.6]]],                 // Westen: Großbritannien (Bomberoffensive)
-  ['west', 1.9, [[9.6, 37.6], [11.0, 41.8], [12.4, 46.0]]],                // Süden: Nordafrika -> Italien
-  ['soviet', 2.7, [[36.5, 55.2], [29.5, 54.3], [23.4, 53.4]]],             // Osten (Nord): Moskau
-  ['soviet', 3.3, [[40.0, 49.0], [31.5, 49.6], [23.6, 50.6]]]              // Osten (Süd): Stalingrad/Don
+  ['west', 1.0, [[0.6, 52.6], [3.4, 52.7], [5.7, 51.7]]],                 // Westen: Großbritannien (Bomberoffensive)
+  ['west', 1.9, [[11.9, 42.6], [12.0, 44.6], [12.3, 46.5]]],               // Süden: Italien -> Alpen
+  ['soviet', 2.7, [[28.6, 54.5], [26.0, 54.1], [23.5, 53.6]]],             // Osten (Nord): Richtung Moskau
+  ['soviet', 3.3, [[28.6, 49.0], [26.0, 49.7], [23.8, 50.7]]]              // Osten (Süd): Ukraine/Don
 ];
 
 export default {
@@ -37,9 +37,9 @@ export default {
   script: 'Die Alliierten werden stärker und Deutschland gerät mehr und mehr unter Druck.',
   caption: { title: 'Europa', sub: '1942' },
   params: {
-    mapScale: { type: 'number', min: .2, max: 1.5, step: .01, value: .64, label: 'Kartenmaßstab' },
-    mapCenterLon: { type: 'number', min: -10, max: 40, step: .5, value: 18, label: 'Kartenmitte Länge (°)' },
-    mapCenterLat: { type: 'number', min: 30, max: 65, step: .5, value: 48.5, label: 'Kartenmitte Breite (°)' },
+    mapScale: { type: 'number', min: .2, max: 2.5, step: .01, value: 1.0, label: 'Kartenmaßstab (Zoom)' },
+    mapCenterLon: { type: 'number', min: -10, max: 40, step: .1, value: 14.6, label: 'Bildmitte Länge (°)' },
+    mapCenterLat: { type: 'number', min: 30, max: 65, step: .1, value: 50.6, label: 'Bildmitte Breite (°)' },
     pulse: { type: 'number', min: 0, max: 1, step: .05, value: .35, label: 'Reich pulsiert (Druck)' },
     arrowSize: { type: 'number', min: .3, max: 3, step: .05, value: 1, label: 'Pfeilstärke' },
     front: { type: 'boolean', value: false, label: 'Ostfront einzeichnen' },
@@ -65,7 +65,7 @@ export default {
     ] : [];
     const border = new THREE.Color(p.borderColor), rgba = a => `rgba(${border.r * 255 | 0},${border.g * 255 | 0},${border.b * 255 | 0},${a})`;
     const map = hiMap({
-      bbox: [-30, 22, 82, 78], texW: 3072, detail: { bbox: [-13, 28, 52, 66], texW: 5120 }, center: [p.mapCenterLon, p.mapCenterLat], scale: p.mapScale, land: p.landColor, sea: p.seaColor,
+      bbox: [-30, 22, 82, 78], texW: 3072, detail: { bbox: [-9, 37, 39, 62], texW: 6144 }, center: [p.mapCenterLon, p.mapCenterLat], scale: p.mapScale, land: p.landColor, sea: p.seaColor,
       borders: rgba(.42), coast: rgba(.3), borderWidth: 1.8,
       font: p.labelFont.startsWith('Cormorant') ? "'Cormorant Garamond', Georgia, serif" : null,
       regions: [
@@ -74,6 +74,8 @@ export default {
         { name: 'reich', parts: REICH_1942, color: p.germanyColor, alpha: .82, outline: '#ffffff', outlineWidth: 2.4, layer: { bbox: [4.5, 44.8, 25, 56.6], pivot: [13.5, 51.3] } }
       ]
     });
+    // Bildmitte (Mitte des Reichs) genau auf den Blickpunkt der Kamera legen -> Reich mittig, unabhängig vom Zoom
+    map.position.set(p.lookX, 0, p.lookZ);
     scene.add(map);
     const U = map.userData, reich = U.layers.reich, P = ([lon, lat]) => U.project(lon, lat);
     U.layers.uk.userData.mesh.material.color.setScalar(1.25);   // kräftig wie die Länderflächen auf dem Globus
@@ -89,11 +91,11 @@ export default {
       return pin;
     };
     const berlin = city([13.4, 52.5], 'Berlin', H.ROLE.axis, 0, -.7);
-    city([-0.1, 51.5], 'London', H.ROLE.west, -1.3, -.15); city([37.6, 55.75], 'Moskau', H.ROLE.soviet, 0, -.7);
+    city([-0.1, 51.5], 'London', H.ROLE.west, -1.3, -.15);
     if (p.labels) {
-      U.country(12.6, 49.6, 'Deutsches Reich', .5 * s, { box });
-      U.country(-3.5, 55.4, 'Großbritannien', .42 * s, { box }); U.country(36.0, 58.2, 'Sowjetunion', .48 * s, { box });
-      U.country(13.6, 42.2, 'Italien', .36 * s, { box, opacity: .7 });
+      U.country(13.0, 49.9, 'Deutsches Reich', .5 * s, { box });
+      U.country(-3.5, 55.4, 'Großbritannien', .42 * s, { box }); U.country(27.5, 56.4, 'Sowjetunion', .48 * s, { box });
+      U.country(10.6, 44.0, 'Italien', .36 * s, { box, opacity: .7 });
     }
     return {
       update(t, p) {
