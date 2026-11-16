@@ -172,6 +172,44 @@ export function hiMap({
       m.userData.head = hd; m.userData.setProgress(0);
       return m;
     },
+    // Flacher Kartenpfeil (wie in Geschichtskarten): breites Band, das zur Spitze hin breiter wird, dreieckige
+    // Spitze, dunkler Schatten darunter für Kontrast. pts = [[lon, lat], …]; setProgress(0..1) lässt ihn wachsen
+    flatArrow(pts, color, { width = .32, head = 1.0, headW = .95, strength = 1.5, opacity = .95 } = {}) {
+      const curve = new THREE.CatmullRomCurve3(pts.map(([lon, lat]) => project(lon, lat, .05)), false, 'centripetal');
+      const L = curve.getLength(), N = 80, hf = Math.min(.45, head / L);
+      const mk = (wScale, y, mat) => {
+        const pos = new Float32Array((N + 1) * 6), idx = [];
+        for (let i = 0; i <= N; i++) {
+          const u = i / N * (1 - hf), c = curve.getPointAt(u), tg = curve.getTangentAt(u);
+          const w = width * wScale * (.55 + .45 * u / (1 - hf)) / 2, nx = -tg.z, nz = tg.x, ln = Math.hypot(nx, nz) || 1;
+          pos.set([c.x + nx / ln * w, y, c.z + nz / ln * w, c.x - nx / ln * w, y, c.z - nz / ln * w], i * 6);
+          if (i < N) idx.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2);
+        }
+        const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setIndex(idx);
+        const body = new THREE.Mesh(geo, mat);
+        const sh = new THREE.Shape([new THREE.Vector2(-headW * wScale / 2, 0), new THREE.Vector2(headW * wScale / 2, 0), new THREE.Vector2(0, head * (wScale > 1 ? 1.12 : 1))]);
+        const hm = new THREE.Mesh(new THREE.ShapeGeometry(sh), mat); hm.rotation.x = -Math.PI / 2;
+        const hp = new THREE.Group(); hp.add(hm); hp.position.y = y;
+        const grp = new THREE.Group(); grp.add(body, hp); g.add(grp);
+        return { body, hp, grp };
+      };
+      const shadow = mk(1.35, .045, new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: .35 * opacity, depthWrite: false, side: THREE.DoubleSide }));
+      const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide }); mat.color.multiplyScalar(strength);
+      const main = mk(1, .06, mat);
+      shadow.grp.renderOrder = 3; main.body.renderOrder = main.hp.children[0].renderOrder = 4; shadow.body.renderOrder = shadow.hp.children[0].renderOrder = 3;
+      const tip = new THREE.Vector3(), tg = new THREE.Vector3();
+      const set = u => {
+        u = clamp(u, 0, 1);
+        for (const part of [shadow, main]) {
+          part.grp.visible = u > .01;
+          part.body.geometry.setDrawRange(0, Math.floor(N * u) * 6);
+          const ub = u * (1 - hf); curve.getPointAt(ub, tip); curve.getTangentAt(ub, tg);
+          part.hp.position.set(tip.x, part.hp.position.y, tip.z); part.hp.rotation.y = Math.atan2(tg.x, tg.z) + Math.PI;   // Spitze (Form-y -> Welt -z) in Laufrichtung
+        }
+      };
+      set(0);
+      return { setProgress: set, material: mat };
+    },
     // Linie (z. B. Frontverlauf) als leuchtende Röhre, setProgress(0..1) zeichnet sie ein
     line(pts, color, { radius = .05, strength = 2 } = {}) {
       const curve = new THREE.CatmullRomCurve3(pts.map(([lon, lat]) => project(lon, lat, .06)), false, 'catmullrom', .2);

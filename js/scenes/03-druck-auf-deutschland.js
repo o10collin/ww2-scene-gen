@@ -24,16 +24,12 @@ const AXIS_ALLIES = [{ c: '380' }, { c: '348' }, { c: '642' }, { c: '100' }, { c
 const SOVIET = [{ c: '643', clip: EAST_OF_FRONT }, { c: '268' }, { c: '051' }, { c: '031' }, { c: '398' }];
 const BRITAIN = [{ c: '826' }];
 
-// Pfeile: [Farbe, Start (s), Wegpunkte]
+// Druck von drei Seiten, als große flache Kartenpfeile bis an die Reichsgrenze: [Farbe, Start (s), Wegpunkte lon/lat]
 const ARROWS = [
-  ['west', .6, [[-0.4, 52.2], [3.2, 52.6], [6.9, 50.95]]],             // RAF: London -> Köln
-  ['west', 1.2, [[-0.6, 53.5], [4.5, 54.6], [9.9, 53.55]]],            // RAF: England -> Hamburg
-  ['west', 2.0, [[-1.0, 35.6], [3.0, 36.9], [9.8, 36.8]]],             // Operation Torch: Oran -> Algier -> Tunis
-  ['west', 1.6, [[29.0, 30.9], [25.5, 31.6], [21.5, 32.1]]],           // El Alamein -> Libyen
-  ['soviet', 2.6, [[44.8, 51.4], [43.3, 50.0], [43.6, 48.85]]],        // Stalingrad, Nordzange
-  ['soviet', 2.9, [[48.0, 46.6], [45.8, 47.5], [44.0, 48.45]]],        // Stalingrad, Südzange
-  ['soviet', 3.4, [[39.4, 55.4], [37.0, 56.2], [34.8, 56.35]]],        // Moskau -> Rschew
-  ['soviet', 3.8, [[43.0, 53.0], [40.8, 52.2], [38.7, 51.8]]]         // Woronesch
+  ['west', 1.0, [[-1.5, 52.4], [2.5, 52.6], [5.6, 51.6]]],                 // Westen: Großbritannien (Bomberoffensive)
+  ['west', 1.9, [[9.6, 37.6], [11.0, 41.8], [12.4, 46.0]]],                // Süden: Nordafrika -> Italien
+  ['soviet', 2.7, [[36.5, 55.2], [29.5, 54.3], [23.4, 53.4]]],             // Osten (Nord): Moskau
+  ['soviet', 3.3, [[40.0, 49.0], [31.5, 49.6], [23.6, 50.6]]]              // Osten (Süd): Stalingrad/Don
 ];
 
 export default {
@@ -46,7 +42,7 @@ export default {
     mapCenterLat: { type: 'number', min: 30, max: 65, step: .5, value: 48.5, label: 'Kartenmitte Breite (°)' },
     pulse: { type: 'number', min: 0, max: 1, step: .05, value: .35, label: 'Reich pulsiert (Druck)' },
     arrowSize: { type: 'number', min: .3, max: 3, step: .05, value: 1, label: 'Pfeilstärke' },
-    front: { type: 'boolean', value: true, label: 'Ostfront einzeichnen' },
+    front: { type: 'boolean', value: false, label: 'Ostfront einzeichnen' },
     landColor: { type: 'color', value: '#5c6476', label: 'Land' },
     seaColor: { type: 'color', value: '#080d16', label: 'Meer' },
     borderColor: { type: 'color', value: '#ebeef4', label: 'Grenzen' },
@@ -83,12 +79,9 @@ export default {
     U.layers.uk.userData.mesh.material.color.setScalar(1.25);   // kräftig wie die Länderflächen auf dem Globus
 
     const front = p.front ? U.line(FRONT, '#e8c27a', { radius: .03, strength: 1.1 }) : null;
-    const arrows = ARROWS.map(([side, t0, pts]) => {
-      const a = U.arc(pts, side === 'west' ? H.ROLE.west : H.ROLE.soviet, { lift: .9, radius: .045 * p.arrowSize, head: .42 * p.arrowSize, strength: 2.2 });
-      return { a, t0 };
-    });
+    const arrows = ARROWS.map(([side, t0, pts]) => ({ a: U.flatArrow(pts, side === 'west' ? H.ROLE.west : H.ROLE.soviet, { width: .42 * p.arrowSize, head: 1.15 * p.arrowSize, headW: 1.15 * p.arrowSize }), t0 }));
 
-    // Städte als Kartenpunkte, Namen in dunklen Boxen (wie Szene 2) oder in Serifenschrift
+    // Wenige, klare Beschriftungen (dunkle Boxen wie Szene 2): Reich, Gegner, Hauptstädte
     const box = !p.labelFont.startsWith('Cormorant'), s = p.labelSize;
     const city = (ll, name, color, dx, dz) => {
       const pin = U.pin(ll[0], ll[1], color, { size: .5 });
@@ -96,14 +89,11 @@ export default {
       return pin;
     };
     const berlin = city([13.4, 52.5], 'Berlin', H.ROLE.axis, 0, -.7);
-    city([12.5, 41.9], 'Rom', H.ROLE.axis, 0, -.7); city([-0.1, 51.5], 'London', H.ROLE.west, -1.3, -.15);
-    city([37.6, 55.75], 'Moskau', H.ROLE.soviet, 0, -.7); city([44.5, 48.7], 'Stalingrad', H.ROLE.soviet, 1.6, -.1); city([30.3, 59.95], 'Leningrad', H.ROLE.soviet, 0, -.7);
+    city([-0.1, 51.5], 'London', H.ROLE.west, -1.3, -.15); city([37.6, 55.75], 'Moskau', H.ROLE.soviet, 0, -.7);
     if (p.labels) {
       U.country(12.6, 49.6, 'Deutsches Reich', .5 * s, { box });
-      U.country(2.4, 46.6, 'Frankreich', .4 * s, { box, opacity: .85 }); U.country(-4.0, 56.6, 'Großbritannien', .4 * s, { box, opacity: .85 });
-      U.country(16.0, 40.7, 'Italien', .4 * s, { box, opacity: .85 }); U.country(45.0, 57.5, 'Sowjetunion', .45 * s, { box, opacity: .85 });
-      U.country(-3.8, 40.0, 'Spanien', .36 * s, { box, opacity: .6 }); U.country(33.5, 39.2, 'Türkei', .36 * s, { box, opacity: .6 });
-      U.country(4.0, 32.6, 'Nordafrika', .36 * s, { box, opacity: .6 });
+      U.country(-3.5, 55.4, 'Großbritannien', .42 * s, { box }); U.country(36.0, 58.2, 'Sowjetunion', .48 * s, { box });
+      U.country(13.6, 42.2, 'Italien', .36 * s, { box, opacity: .7 });
     }
     return {
       update(t, p) {
@@ -112,7 +102,7 @@ export default {
         const k = 1 + p.pulse * H.span(t, 2, 3.5) * (.25 + .25 * H.pulse(t, 1.1));
         reich.userData.mesh.material.color.setScalar(1.15 * k);
         if (front) front.userData.setProgress(H.span(t, .4, 2.4));
-        for (const { a, t0 } of arrows) a.userData.setProgress(H.span(t, t0, t0 + 1.8));
+        for (const { a, t0 } of arrows) a.setProgress(H.span(t, t0, t0 + 1.6));
         berlin.userData.set({ halo: t > 2 ? ((t - 2) % 1.6) / 1.6 : 0 });
       }
     };
