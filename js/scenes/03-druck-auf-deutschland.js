@@ -44,7 +44,7 @@ export default {
     mapScale: { type: 'number', min: .2, max: 1.2, step: .01, value: .44, label: 'Kartenmaßstab' },
     mapCenterLon: { type: 'number', min: -10, max: 40, step: .5, value: 17.5, label: 'Kartenmitte Länge (°)' },
     mapCenterLat: { type: 'number', min: 30, max: 65, step: .5, value: 43.3, label: 'Kartenmitte Breite (°)' },
-    squeeze: { type: 'number', min: 0, max: .3, step: .01, value: .06, label: 'Reich zusammendrücken' },
+    pulse: { type: 'number', min: 0, max: 1, step: .05, value: .35, label: 'Reich pulsiert (Druck)' },
     arrowSize: { type: 'number', min: .3, max: 3, step: .05, value: 1, label: 'Pfeilstärke' },
     front: { type: 'boolean', value: true, label: 'Ostfront einzeichnen' },
     landColor: { type: 'color', value: '#767b82', label: 'Land' },
@@ -102,8 +102,10 @@ export default {
       update(t, p) {
         const u = H.easeInOut(t / p.duration);
         // Reich wird spürbar zusammengedrückt und pulsiert leicht
-        const sq = 1 - p.squeeze * H.smooth(H.span(t, 1.5, p.duration)) - .012 * H.pulse(t, 1.1) * H.span(t, 2, 3);
-        reich.scale.set(sq, 1, sq);
+        // Druck: Fläche pulsiert heller, sobald die Pfeile ankommen (keine Größenänderung, damit der Umriss
+        // deckungsgleich mit den Grenzen der Karte bleibt)
+        const k = 1 + p.pulse * H.span(t, 2, 3.5) * (.25 + .25 * H.pulse(t, 1.1));
+        reich.userData.mesh.material.color.setScalar(k);
         if (front) front.userData.setProgress(H.span(t, .4, 2.4));
         for (const { a, t0 } of arrows) a.userData.setProgress(H.span(t, t0, t0 + 1.8) * (.92 + .08 * H.pulse(t + t0, .7)));
       }
