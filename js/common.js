@@ -992,7 +992,7 @@ function tracePolys(g, polys, W, Hh) {
 }
 // Kartenpunkt wie in Apple Karten: weicher Schatten, weißer Ring, farbiger Kern (Textur je Farbe)
 const PIN_TEX = {};
-function pinTexture(color) {
+export function pinTexture(color) {
   if (PIN_TEX[color]) return PIN_TEX[color];
   const S = 128, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d');
   g.shadowColor = 'rgba(0,0,0,.55)'; g.shadowBlur = 14; g.shadowOffsetY = 3;
@@ -1003,7 +1003,7 @@ function pinTexture(color) {
   g.fillStyle = gr; g.beginPath(); g.arc(S / 2, S / 2, S * .22, 0, Math.PI * 2); g.fill();
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; PIN_TEX[color] = t; return t;
 }
-function haloTexture() {
+export function haloTexture() {
   if (PIN_TEX._halo) return PIN_TEX._halo;
   const S = 128, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d');
   const gr = g.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);

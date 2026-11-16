@@ -4,7 +4,7 @@
 // Eine Region kann als eigene Ebene über der Karte liegen (für Pulsieren/Zusammendrücken), mit Umriss und Glanz.
 import * as THREE from 'three';
 import { EU_COUNTRIES } from './geo-europe.js';
-import { terrainTexture, label, labelFont, glowMat, clamp } from './common.js';
+import { terrainTexture, label, labelFont, glowMat, clamp, pinTexture, haloTexture } from './common.js';
 
 const D2R = Math.PI / 180;
 export const mercY = lat => Math.log(Math.tan(Math.PI / 4 + lat * D2R / 2)) / D2R;
@@ -88,6 +88,12 @@ export function hiMap({
   for (const cn of EU_COUNTRIES) { ctx.beginPath(); traceCountry(ctx, cn, px); ctx.stroke(); }
   ctx.strokeStyle = coast; ctx.lineWidth = borderWidth * 1.3 * k; ctx.beginPath(); for (const cn of EU_COUNTRIES) traceCountry(ctx, cn, px); ctx.stroke();
   ctx.restore();
+  // Unter Regionen mit eigener Ebene die heutigen Grenzen löschen (Land neu füllen), damit durch eine
+  // halbtransparente Fläche keine modernen Grenzen durchscheinen
+  for (const r of regions.filter(r => r.layer)) {
+    ctx.save(); ctx.fillStyle = land; fillRegion(ctx, r.parts, px);
+    ctx.globalAlpha = .4; ctx.globalCompositeOperation = 'overlay'; ctx.fillStyle = ctx.createPattern(tt, 'repeat'); fillRegion(ctx, r.parts, px); ctx.restore();
+  }
   if (graticule) {
     ctx.strokeStyle = 'rgba(255,255,255,.05)'; ctx.lineWidth = 1.4 * k; ctx.beginPath();
     for (let lon = Math.ceil(lon0 / 10) * 10; lon <= lon1; lon += 10) { const [x] = px(lon, 0); ctx.moveTo(x, 0); ctx.lineTo(x, Hh); }
@@ -112,7 +118,7 @@ export function hiMap({
     og.globalCompositeOperation = 'source-atop'; og.globalAlpha = .18; og.fillStyle = og.createPattern(tt, 'repeat'); og.fillRect(0, 0, LW, LH);
     og.globalCompositeOperation = 'source-over'; og.globalAlpha = 1;
     // Innenschein am Rand
-    const glow = outlineOf(mask, 10 * lk, r.glow || r.color); og.save(); og.globalCompositeOperation = 'source-atop'; og.filter = `blur(${6 * lk}px)`; og.drawImage(glow, 0, 0); og.restore();
+    if (r.glow) { const glow = outlineOf(mask, 10 * lk, r.glow); og.save(); og.globalCompositeOperation = 'source-atop'; og.filter = `blur(${6 * lk}px)`; og.drawImage(glow, 0, 0); og.restore(); }
     // kräftiger heller Außenumriss
     og.drawImage(outlineOf(mask, (r.outlineWidth ?? 3.2) * lk, r.outline || '#f1e6dc'), 0, 0);
     const lt = new THREE.CanvasTexture(out); lt.colorSpace = THREE.SRGBColorSpace; lt.anisotropy = 8;
@@ -125,9 +131,10 @@ export function hiMap({
 
   g.userData = {
     project, layers,
-    // Ländername: Großbuchstaben, gesperrt, Schrift der Bauchbinde
-    country(lon, lat, text, size = 1, { color = '#f4f1ea', opacity = .95 } = {}) {
-      const l = label(text, { size, font: font ? `500 56px ${font}` : labelFont(52, 500), upper: true, spacing: font ? 8 : 10, color, shadow: true });
+    // Ländername: Großbuchstaben, gesperrt (Serifenschrift) oder wie die Globus-Beschriftung in Szene 2 (dunkle Box)
+    country(lon, lat, text, size = 1, { color = '#f4f1ea', opacity = .95, box = false } = {}) {
+      const l = box ? label(text, { size, font: labelFont(60, 500), color, bg: 'rgba(14,18,26,.72)' })
+        : label(text, { size, font: font ? `500 56px ${font}` : labelFont(52, 500), upper: true, spacing: font ? 8 : 10, color, shadow: true });
       l.material.opacity = opacity; l.position.copy(project(lon, lat, .6)); g.add(l); return l;
     },
     // Stadt: weißer Punkt mit dunklem Rand + kleine Beschriftung
@@ -138,6 +145,31 @@ export function hiMap({
       ring.rotation.x = d.rotation.x = -Math.PI / 2; ring.position.copy(v); d.position.copy(v).setY(v.y + .005);
       const l = label(text, { size, font: font ? `500 56px ${font}` : labelFont(52, 500), color: '#f4f1ea' }); l.position.set(v.x + dx, .5, v.z + dz);
       g.add(ring, d, l); return { dot: d, ring, label: l };
+    },
+    // Kartenpunkt wie in Apple Karten (wie auf dem Globus in Szene 2): weißer Ring, farbiger Kern, pulsierender Halo
+    pin(lon, lat, color, { size = .5 } = {}) {
+      const grp = new THREE.Group(); grp.position.copy(project(lon, lat, .08)); g.add(grp);
+      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTexture(), color, transparent: true, depthTest: false, depthWrite: false, opacity: 0 }));
+      const dot = new THREE.Sprite(new THREE.SpriteMaterial({ map: pinTexture(color), transparent: true, depthTest: false, depthWrite: false }));
+      halo.renderOrder = 8; dot.renderOrder = 9; grp.add(halo, dot);
+      const st = { scale: 1, halo: 0, opacity: 1 };
+      const apply = () => { dot.material.opacity = st.opacity; dot.scale.setScalar(size * st.scale); halo.material.opacity = st.opacity * (1 - st.halo) * .8; halo.scale.setScalar(size * st.scale * (1 + st.halo * 2.6)); halo.visible = st.halo > 0; };
+      apply(); grp.userData.set = o => { Object.assign(st, o); apply(); };
+      return grp;
+    },
+    // Bogen über der Karte (wie die Bögen auf dem Globus): dünne leuchtende Röhre, ein Kartenpunkt läuft an der Spitze
+    // mit und bleibt am Ziel stehen; setProgress(0..1)
+    arc(pts, color, { lift = 1.2, radius = .05, head = .45, strength = 2 } = {}) {
+      const n = pts.length;
+      const v = pts.map(([lon, lat], i) => project(lon, lat, .06 + lift * Math.sin(Math.PI * i / (n - 1))));
+      const curve = new THREE.CatmullRomCurve3(v, false, 'catmullrom', .5);
+      const geo = new THREE.TubeGeometry(curve, 64, radius, 6, false), total = geo.index.count;
+      const m = new THREE.Mesh(geo, glowMat(color, strength)); g.add(m);
+      const hd = new THREE.Sprite(new THREE.SpriteMaterial({ map: pinTexture(new THREE.Color(color).getStyle()), transparent: true, depthTest: false, depthWrite: false }));
+      hd.scale.setScalar(head); hd.renderOrder = 9; g.add(hd);
+      m.userData.setProgress = u => { u = clamp(u, 0, 1); geo.setDrawRange(0, Math.floor(total * u / 6) * 6); m.visible = hd.visible = u > 0; curve.getPoint(u, hd.position); };
+      m.userData.head = hd; m.userData.setProgress(0);
+      return m;
     },
     // Linie (z. B. Frontverlauf) als leuchtende Röhre, setProgress(0..1) zeichnet sie ein
     line(pts, color, { radius = .05, strength = 2 } = {}) {
