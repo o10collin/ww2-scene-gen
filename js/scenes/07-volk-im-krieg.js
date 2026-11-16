@@ -81,6 +81,7 @@ export default {
       const dir = i % 2 ? 1 : -1, z = dir > 0 ? -3.1 : -4.0;
       const f = H.figure({ color: '#e8e3d8', scale: r() < p.youthShare ? .8 : 1, glow: p.workerGlow, strength: 1.2, model: 'worker', clips: { idle: 'Standing_Idle_Loop', walk: 'Carrying_A_Box', run: 'Carrying_A_Box' }, seed: 40 + i * 7 });
       f.rotation.y = dir > 0 ? 0 : Math.PI; scene.add(f);
+      const box = H.crate(.42, '#6a5844'); box.position.set(.38, .82, 0); f.add(box);   // Kiste in den Armen
       carriers.push({ f, dir, z, x0: -20 + i * 11 + r() * 3, v: .9 + r() * .2 });
     }
     // Kistenstapel und Fässer am Rand
