@@ -52,7 +52,7 @@ function outlineOf(mask, width, color) {
 export function hiMap({
   bbox = [-14, 27, 56, 67], center = [15, 50], scale = .5, texW = 4096,
   sea = '#151c25', land = '#6c7178', borders = 'rgba(225,230,238,.35)', coast = 'rgba(255,255,255,.28)',
-  regions = [], graticule = true
+  regions = [], graticule = true, borderWidth = 1.6, glowBorders = false, font = null
 } = {}) {
   const g = new THREE.Group();
   const [lon0, lat0, lon1, lat1] = bbox, my0 = mercY(lat0), my1 = mercY(lat1);
@@ -81,9 +81,13 @@ export function hiMap({
     if (r.hatch) { ctx.save(); ctx.globalAlpha = r.hatchAlpha ?? .5; ctx.fillStyle = hatchPattern(ctx, r.hatch, k); fillRegion(ctx, r.parts, px); ctx.restore(); }
   }
   // Grenzen, Küsten, Gradnetz
-  ctx.strokeStyle = borders; ctx.lineWidth = 1.6 * k; ctx.lineJoin = 'round';
+  // Grenzen (optional mit weichem Leuchten wie die weißen Grenzbänder der übrigen Karten)
+  ctx.save(); ctx.lineJoin = 'round';
+  if (glowBorders) { ctx.shadowColor = borders; ctx.shadowBlur = 7 * k; }
+  ctx.strokeStyle = borders; ctx.lineWidth = borderWidth * k;
   for (const cn of EU_COUNTRIES) { ctx.beginPath(); traceCountry(ctx, cn, px); ctx.stroke(); }
-  ctx.strokeStyle = coast; ctx.lineWidth = 2.2 * k; ctx.beginPath(); for (const cn of EU_COUNTRIES) traceCountry(ctx, cn, px); ctx.stroke();
+  ctx.strokeStyle = coast; ctx.lineWidth = borderWidth * 1.3 * k; ctx.beginPath(); for (const cn of EU_COUNTRIES) traceCountry(ctx, cn, px); ctx.stroke();
+  ctx.restore();
   if (graticule) {
     ctx.strokeStyle = 'rgba(255,255,255,.05)'; ctx.lineWidth = 1.4 * k; ctx.beginPath();
     for (let lon = Math.ceil(lon0 / 10) * 10; lon <= lon1; lon += 10) { const [x] = px(lon, 0); ctx.moveTo(x, 0); ctx.lineTo(x, Hh); }
@@ -105,7 +109,7 @@ export function hiMap({
     mg.fillStyle = '#ffffff'; fillRegion(mg, r.parts, lpx);
     const out = document.createElement('canvas'); out.width = LW; out.height = LH; const og = out.getContext('2d');
     og.globalAlpha = r.alpha ?? .85; og.drawImage(mask, 0, 0); og.globalCompositeOperation = 'source-in'; og.fillStyle = r.color; og.fillRect(0, 0, LW, LH);
-    og.globalCompositeOperation = 'source-atop'; og.globalAlpha = .35; og.fillStyle = og.createPattern(tt, 'repeat'); og.fillRect(0, 0, LW, LH);
+    og.globalCompositeOperation = 'source-atop'; og.globalAlpha = .18; og.fillStyle = og.createPattern(tt, 'repeat'); og.fillRect(0, 0, LW, LH);
     og.globalCompositeOperation = 'source-over'; og.globalAlpha = 1;
     // Innenschein am Rand
     const glow = outlineOf(mask, 10 * lk, r.glow || r.color); og.save(); og.globalCompositeOperation = 'source-atop'; og.filter = `blur(${6 * lk}px)`; og.drawImage(glow, 0, 0); og.restore();
@@ -122,8 +126,8 @@ export function hiMap({
   g.userData = {
     project, layers,
     // Ländername: Großbuchstaben, gesperrt, Schrift der Bauchbinde
-    country(lon, lat, text, size = 1, { color = '#e9edf2', opacity = .85 } = {}) {
-      const l = label(text, { size, font: labelFont(52, 500), upper: true, spacing: 10, color, shadow: true });
+    country(lon, lat, text, size = 1, { color = '#f4f1ea', opacity = .95 } = {}) {
+      const l = label(text, { size, font: font ? `500 56px ${font}` : labelFont(52, 500), upper: true, spacing: font ? 8 : 10, color, shadow: true });
       l.material.opacity = opacity; l.position.copy(project(lon, lat, .6)); g.add(l); return l;
     },
     // Stadt: weißer Punkt mit dunklem Rand + kleine Beschriftung
@@ -132,7 +136,7 @@ export function hiMap({
       const ring = new THREE.Mesh(new THREE.CircleGeometry(dot * 1.45, 24), new THREE.MeshBasicMaterial({ color: '#111418', transparent: true, opacity: .8 }));
       const d = new THREE.Mesh(new THREE.CircleGeometry(dot, 24), glowMat('#ffffff', 1.4));
       ring.rotation.x = d.rotation.x = -Math.PI / 2; ring.position.copy(v); d.position.copy(v).setY(v.y + .005);
-      const l = label(text, { size, font: labelFont(52, 500), color: '#f4f1ea' }); l.position.set(v.x + dx, .5, v.z + dz);
+      const l = label(text, { size, font: font ? `500 56px ${font}` : labelFont(52, 500), color: '#f4f1ea' }); l.position.set(v.x + dx, .5, v.z + dz);
       g.add(ring, d, l); return { dot: d, ring, label: l };
     },
     // Linie (z. B. Frontverlauf) als leuchtende Röhre, setProgress(0..1) zeichnet sie ein

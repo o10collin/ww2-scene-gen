@@ -96,7 +96,7 @@ Abdunkeln 0 und Bloom 0 wieder erreichbar.
 
 `js/map-hi.js` (`hiMap`) zeichnet Europa aus Natural-Earth-Daten 1:50m (`js/geo-europe.js`, gemeinfrei) als Textur in
 Mercator-Projektion: Meer, Land mit Geländestruktur, Grenzen, Küsten, Gradnetz. Historische Gebiete entstehen aus
-heutigen Ländern, bei Bedarf mit einem Polygon beschnitten. Szene 3 zeigt so das Großdeutsche Reich Ende 1942
+heutigen Ländern, bei Bedarf mit einem Polygon beschnitten. Szene 3 (und der Globus in Szene 2, über `js/history.js`) zeigt so das Großdeutsche Reich Ende 1942
 (Deutschland, Österreich, Böhmen und Mähren, annektierte Teile Polens, Ostpreußen mit Memelland, Elsass-Lothringen,
 Luxemburg, Nord-Slowenien) als eigene Ebene mit Umriss, besetzte Gebiete schraffiert, Verbündete der Achse gedämpft,
 die Ostfront vom November 1942 und historisch verortete Pfeile (Bomberangriffe auf Köln und Hamburg, Operation Torch,

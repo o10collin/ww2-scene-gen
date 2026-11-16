@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import * as H from '../common.js';
+import { REICH_1942, ITALY_1941, JAPAN_1941 } from '../history.js';
 const { P } = H;
 
 const TOKIO = [35.7, 139.7], PEARL = [21.3, -157.9], WASHINGTON = [38.9, -77.0], BERLIN = [52.5, 13.4], ROM = [41.9, 12.5];
@@ -42,8 +43,9 @@ export default {
     const U = g.userData, k = R / 5;
 
     // Länderflächen
-    const fJapan = U.highlight(['392'], H.ROLE.axis), fUSA = U.highlight(['840'], H.ROLE.west, 1.1);
-    const fGer = U.highlight(['276', '040'], H.ROLE.axis), fIta = U.highlight(['380'], H.ROLE.axis);
+    // Grenzen von 1941: Großdeutsches Reich, Italien mit Albanien, Japan mit Korea und Taiwan
+    const fJapan = U.highlight(JAPAN_1941, H.ROLE.axis), fUSA = U.highlight(['840'], H.ROLE.west, 1.1);
+    const fGer = U.highlight(REICH_1942, H.ROLE.axis), fIta = U.highlight(ITALY_1941, H.ROLE.axis);
 
     // Orte als Kartenpunkte (Apple-Karten-Stil): weißer Ring, farbiger Kern, pulsierender Halo
     const pin = (ll, c, sz = 1) => U.pin(ll[0], ll[1], c, { size: .55 * k * sz });

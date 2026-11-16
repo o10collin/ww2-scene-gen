@@ -1039,15 +1039,27 @@ function globeTexture({ ocean, land, borders, coast, grid, W = 4096 }) {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; t.needsUpdate = true;
   GLOBE_TEX[key] = t; return t;
 }
-// Ländermaske (weiß auf transparent) für Hervorhebungen
+// Ländermaske (weiß auf transparent) für Hervorhebungen. parts: Länder-IDs/Namen oder { c, clip: [[lon, lat], …] }
+// (Schnittmenge mit einem Polygon, für historische Grenzen). Fläche halbtransparent, Außenumriss kräftig.
 const MASK_TEX = {};
-function countryMask(ids, W = 2048) {
-  const key = ids.join(',') + '|' + W;
+function countryMask(parts, W = 2048) {
+  parts = parts.map(p => typeof p === 'string' ? { c: p } : p);
+  const key = JSON.stringify(parts) + '|' + W;
   if (MASK_TEX[key]) return MASK_TEX[key];
-  const Hh = W / 2, c = document.createElement('canvas'); c.width = W; c.height = Hh;
-  const g = c.getContext('2d');
-  g.fillStyle = 'rgba(255,255,255,.78)'; g.strokeStyle = '#ffffff'; g.lineWidth = 3 * W / 2048; g.lineJoin = 'round';
-  for (const cn of COUNTRIES) if (ids.includes(cn[0]) || ids.includes(cn[1])) { g.beginPath(); tracePolys(g, cn[2], W, Hh); g.fill('evenodd'); g.stroke(); }
+  const Hh = W / 2, k = W / 2048;
+  const m = document.createElement('canvas'); m.width = W; m.height = Hh; const mg = m.getContext('2d');
+  const px = (lon, lat) => [(lon + 180) / 360 * W, (90 - lat) / 180 * Hh];
+  mg.fillStyle = '#ffffff';
+  for (const part of parts) for (const cn of COUNTRIES) if (cn[0] === part.c || cn[1] === part.c) {
+    mg.save();
+    if (part.clip) { mg.beginPath(); part.clip.forEach(([lon, lat], i) => { const [x, y] = px(lon, lat); if (i) mg.lineTo(x, y); else mg.moveTo(x, y); }); mg.closePath(); mg.clip(); }
+    mg.beginPath(); tracePolys(mg, cn[2], W, Hh); mg.fill('evenodd');
+    mg.restore();
+  }
+  const c = document.createElement('canvas'); c.width = W; c.height = Hh; const g = c.getContext('2d');
+  for (let a = 0; a < 12; a++) { const an = a / 12 * Math.PI * 2; g.drawImage(m, Math.cos(an) * 2.2 * k, Math.sin(an) * 2.2 * k); }   // Umriss: Maske geweitet …
+  g.globalCompositeOperation = 'destination-out'; g.drawImage(m, 0, 0);                                                                  // … minus Innenfläche
+  g.globalCompositeOperation = 'source-over'; g.globalAlpha = .78; g.drawImage(m, 0, 0);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; t.needsUpdate = true;
   MASK_TEX[key] = t; return t;
 }
