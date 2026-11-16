@@ -171,7 +171,7 @@ export const CLIP_NAMES = ['Standing_Idle_Loop', 'Standing_Idle', 'Walking', 'Ru
 const ONESHOT = n => /Dying|Death|Salute|Pointing_Onward|Stepping_Forward/.test(n);
 const BROKEN_HIPS = n => n === 'Walking';   // Hüftspur dieses Clips liegt auf Bodenhöhe
 // Meter pro Clip-Durchlauf (vor dem Entfernen der Wurzelbewegung gemessen), damit Schritte zur Strecke passen
-const LOOP_M = { Rifle_Walk_Forward: 1.94, Rifle_Run_Forward: 2.43, Rifle_Walking_Crouched: 1.21, Injured_Walking: 2.1, Walking: 1.55, Walk_Natural: 1.62, Run_Natural: 1.63, Running_Fast: 2.2, Jogging: 5.09, Pushing_Heavy_Object: 1.21 };
+const LOOP_M = { Rifle_Walk_Forward: 1.94, Rifle_Run_Forward: 2.43, Rifle_Walking_Crouched: 1.21, Injured_Walking: 2.1, Walking: 1.55, Walk_Natural: 1.62, Run_Natural: 1.63, Walk: 1.62, Run: 1.63, Running_Fast: 2.2, Jogging: 5.09, Pushing_Heavy_Object: 1.21 };
 const ROLE_CLIPS = {
   soldier: { idle: 'Rifle_Idle', walk: 'Rifle_Walk_Forward', run: 'Rifle_Run_Forward' },
   civil: { idle: 'Standing_Idle_Loop', walk: 'Walk_Natural', run: 'Run_Natural' }

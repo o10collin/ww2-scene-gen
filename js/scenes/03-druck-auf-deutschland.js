@@ -41,9 +41,9 @@ export default {
   script: 'Die Alliierten werden stärker und Deutschland gerät mehr und mehr unter Druck.',
   caption: { title: 'Europa', sub: '1942' },
   params: {
-    mapScale: { type: 'number', min: .2, max: 1.2, step: .01, value: .44, label: 'Kartenmaßstab' },
-    mapCenterLon: { type: 'number', min: -10, max: 40, step: .5, value: 17.5, label: 'Kartenmitte Länge (°)' },
-    mapCenterLat: { type: 'number', min: 30, max: 65, step: .5, value: 43.3, label: 'Kartenmitte Breite (°)' },
+    mapScale: { type: 'number', min: .2, max: 1.5, step: .01, value: .64, label: 'Kartenmaßstab' },
+    mapCenterLon: { type: 'number', min: -10, max: 40, step: .5, value: 18, label: 'Kartenmitte Länge (°)' },
+    mapCenterLat: { type: 'number', min: 30, max: 65, step: .5, value: 48.5, label: 'Kartenmitte Breite (°)' },
     pulse: { type: 'number', min: 0, max: 1, step: .05, value: .35, label: 'Reich pulsiert (Druck)' },
     arrowSize: { type: 'number', min: .3, max: 3, step: .05, value: 1, label: 'Pfeilstärke' },
     front: { type: 'boolean', value: true, label: 'Ostfront einzeichnen' },
@@ -56,7 +56,7 @@ export default {
     alliesAxisColor: { type: 'color', value: '#5e3a37', label: 'Verbündete der Achse' },
     labelFont: { type: 'select', options: ['Cormorant Garamond (Serif)', 'wie Bauchbinde'], value: 'wie Bauchbinde', label: 'Schrift Beschriftung' },
     labels: { type: 'boolean', value: true, label: 'Beschriftung' },
-    labelSize: { type: 'number', min: .3, max: 3, step: .05, value: 1, label: 'Beschriftung Größe' },
+    labelSize: { type: 'number', min: .3, max: 3, step: .05, value: 1.35, label: 'Beschriftung Größe' },
     ...H.cameraParams([0, 26, 20], [0, 21, 14], [0.5, 0, -2], 38)
   },
   build({ scene, params: p, rng: r }) {
@@ -69,7 +69,7 @@ export default {
     ] : [];
     const border = new THREE.Color(p.borderColor), rgba = a => `rgba(${border.r * 255 | 0},${border.g * 255 | 0},${border.b * 255 | 0},${a})`;
     const map = hiMap({
-      bbox: [-30, 22, 82, 78], center: [p.mapCenterLon, p.mapCenterLat], scale: p.mapScale, land: p.landColor, sea: p.seaColor,
+      bbox: [-30, 22, 82, 78], texW: 3072, detail: { bbox: [-13, 28, 52, 66], texW: 5120 }, center: [p.mapCenterLon, p.mapCenterLat], scale: p.mapScale, land: p.landColor, sea: p.seaColor,
       borders: rgba(.42), coast: rgba(.3), borderWidth: 1.8,
       font: p.labelFont.startsWith('Cormorant') ? "'Cormorant Garamond', Georgia, serif" : null,
       regions: [

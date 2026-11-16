@@ -50,66 +50,67 @@ function outlineOf(mask, width, color) {
 }
 
 export function hiMap({
-  bbox = [-14, 27, 56, 67], center = [15, 50], scale = .5, texW = 4096,
+  bbox = [-14, 27, 56, 67], center = [15, 50], scale = .5, texW = 4096, detail = null,
   sea = '#151c25', land = '#6c7178', borders = 'rgba(225,230,238,.35)', coast = 'rgba(255,255,255,.28)',
-  regions = [], graticule = true, borderWidth = 1.6, glowBorders = false, font = null
+  regions = [], graticule = true, borderWidth = 1.6, glowBorders = false, font = null, texture = .22
 } = {}) {
   const g = new THREE.Group();
-  const [lon0, lat0, lon1, lat1] = bbox, my0 = mercY(lat0), my1 = mercY(lat1);
-  const W = texW, Hh = Math.round(texW * (my1 - my0) / (lon1 - lon0)), k = W / 4096;
-  const px = (lon, lat) => [(lon - lon0) / (lon1 - lon0) * W, (my1 - mercY(lat)) / (my1 - my0) * Hh];
   const project = (lon, lat, y = 0) => new THREE.Vector3((lon - center[0]) * scale, y, -(mercY(lat) - mercY(center[1])) * scale);
-
-  const c = document.createElement('canvas'); c.width = W; c.height = Hh; const ctx = c.getContext('2d');
   const tt = terrainTexture().image;
-  // Meer: dunkler Verlauf mit Struktur
-  const sg = ctx.createLinearGradient(0, 0, 0, Hh); sg.addColorStop(0, sea); sg.addColorStop(1, new THREE.Color(sea).multiplyScalar(.75).getStyle());
-  ctx.fillStyle = sg; ctx.fillRect(0, 0, W, Hh);
-  ctx.save(); ctx.globalAlpha = .22; ctx.globalCompositeOperation = 'soft-light'; ctx.fillStyle = ctx.createPattern(tt, 'repeat'); ctx.fillRect(0, 0, W, Hh); ctx.restore();
-  // Küstenschein im Meer
-  ctx.save(); ctx.shadowColor = 'rgba(140,170,200,.22)'; ctx.shadowBlur = 26 * k; ctx.fillStyle = land;
-  ctx.beginPath(); for (const cn of EU_COUNTRIES) traceCountry(ctx, cn, px); ctx.fill('nonzero'); ctx.restore();
-  // Land mit Schatten nach Südosten und Geländestruktur
-  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = 8 * k; ctx.shadowOffsetX = 3 * k; ctx.shadowOffsetY = 4 * k; ctx.fillStyle = land;
-  for (const cn of EU_COUNTRIES) { ctx.beginPath(); traceCountry(ctx, cn, px); ctx.fill('evenodd'); }
-  ctx.restore();
-  ctx.save(); ctx.beginPath(); for (const cn of EU_COUNTRIES) traceCountry(ctx, cn, px); ctx.clip('nonzero');
-  ctx.globalAlpha = .4; ctx.globalCompositeOperation = 'overlay'; ctx.fillStyle = ctx.createPattern(tt, 'repeat'); ctx.fillRect(0, 0, W, Hh); ctx.restore();
-  // Regionen, die fest in der Karte stehen (nicht als eigene Ebene)
-  for (const r of regions.filter(r => !r.layer)) {
-    ctx.save(); ctx.globalAlpha = r.alpha ?? .5; ctx.fillStyle = r.color; fillRegion(ctx, r.parts, px); ctx.restore();
-    if (r.hatch) { ctx.save(); ctx.globalAlpha = r.hatchAlpha ?? .5; ctx.fillStyle = hatchPattern(ctx, r.hatch, k); fillRegion(ctx, r.parts, px); ctx.restore(); }
-  }
-  // Grenzen, Küsten, Gradnetz
-  // Grenzen (optional mit weichem Leuchten wie die weißen Grenzbänder der übrigen Karten)
-  ctx.save(); ctx.lineJoin = 'round';
-  if (glowBorders) { ctx.shadowColor = borders; ctx.shadowBlur = 7 * k; }
-  ctx.strokeStyle = borders; ctx.lineWidth = borderWidth * k;
-  for (const cn of EU_COUNTRIES) { ctx.beginPath(); traceCountry(ctx, cn, px); ctx.stroke(); }
-  ctx.strokeStyle = coast; ctx.lineWidth = borderWidth * 1.3 * k; ctx.beginPath(); for (const cn of EU_COUNTRIES) traceCountry(ctx, cn, px); ctx.stroke();
-  ctx.restore();
-  // Unter Regionen mit eigener Ebene die heutigen Grenzen löschen (Land neu füllen), damit durch eine
-  // halbtransparente Fläche keine modernen Grenzen durchscheinen
-  for (const r of regions.filter(r => r.layer)) {
-    ctx.save(); ctx.fillStyle = land; fillRegion(ctx, r.parts, px);
-    ctx.globalAlpha = .4; ctx.globalCompositeOperation = 'overlay'; ctx.fillStyle = ctx.createPattern(tt, 'repeat'); fillRegion(ctx, r.parts, px); ctx.restore();
-  }
-  if (graticule) {
-    ctx.strokeStyle = 'rgba(255,255,255,.05)'; ctx.lineWidth = 1.4 * k; ctx.beginPath();
-    for (let lon = Math.ceil(lon0 / 10) * 10; lon <= lon1; lon += 10) { const [x] = px(lon, 0); ctx.moveTo(x, 0); ctx.lineTo(x, Hh); }
-    for (let lat = Math.ceil(lat0 / 10) * 10; lat <= lat1; lat += 10) { const [, y] = px(0, lat); ctx.moveTo(0, y); ctx.lineTo(W, y); }
-    ctx.stroke();
-  }
-  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
-  const a = project(lon0, lat0), b = project(lon1, lat1);
-  const plane = new THREE.Mesh(new THREE.PlaneGeometry(b.x - a.x, a.z - b.z), new THREE.MeshBasicMaterial({ map: tex }));
-  plane.rotation.x = -Math.PI / 2; plane.position.set((a.x + b.x) / 2, 0, (a.z + b.z) / 2); g.add(plane);
+  // Eine Kachel der Karte: bb = [lon0, lat0, lon1, lat1], W = Texturbreite. Linienbreiten in Weltmaß (k nach Pixel je Grad).
+  // detail: zweite, höher aufgelöste Kachel für den Kernbereich über einer gröberen Umgebung -> scharf beim Heranzoomen
+  const paint = (bb, W, y) => {
+    const [lon0, lat0, lon1, lat1] = bb, my0 = mercY(lat0), my1 = mercY(lat1);
+    const Hh = Math.round(W * (my1 - my0) / (lon1 - lon0)), k = W / (lon1 - lon0) / 58.5;
+    const px = (lon, lat) => [(lon - lon0) / (lon1 - lon0) * W, (my1 - mercY(lat)) / (my1 - my0) * Hh];
+    const c = document.createElement('canvas'); c.width = W; c.height = Hh; const ctx = c.getContext('2d');
+    // Meer: dunkler Verlauf mit leichter Struktur
+    const sg = ctx.createLinearGradient(0, 0, 0, Hh); sg.addColorStop(0, sea); sg.addColorStop(1, new THREE.Color(sea).multiplyScalar(.8).getStyle());
+    ctx.fillStyle = sg; ctx.fillRect(0, 0, W, Hh);
+    ctx.save(); ctx.globalAlpha = texture * .5; ctx.globalCompositeOperation = 'soft-light'; ctx.fillStyle = ctx.createPattern(tt, 'repeat'); ctx.fillRect(0, 0, W, Hh); ctx.restore();
+    // Land mit leichtem Schatten und Geländestruktur
+    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = 6 * k; ctx.shadowOffsetX = 2 * k; ctx.shadowOffsetY = 3 * k; ctx.fillStyle = land;
+    for (const cn of EU_COUNTRIES) { ctx.beginPath(); traceCountry(ctx, cn, px); ctx.fill('evenodd'); }
+    ctx.restore();
+    ctx.save(); ctx.beginPath(); for (const cn of EU_COUNTRIES) traceCountry(ctx, cn, px); ctx.clip('nonzero');
+    ctx.globalAlpha = texture; ctx.globalCompositeOperation = 'overlay'; ctx.fillStyle = ctx.createPattern(tt, 'repeat'); ctx.fillRect(0, 0, W, Hh); ctx.restore();
+    // Regionen, die fest in der Karte stehen (nicht als eigene Ebene)
+    for (const r of regions.filter(r => !r.layer)) {
+      ctx.save(); ctx.globalAlpha = r.alpha ?? .5; ctx.fillStyle = r.color; fillRegion(ctx, r.parts, px); ctx.restore();
+      if (r.hatch) { ctx.save(); ctx.globalAlpha = r.hatchAlpha ?? .5; ctx.fillStyle = hatchPattern(ctx, r.hatch, k); fillRegion(ctx, r.parts, px); ctx.restore(); }
+    }
+    // Grenzen und Küsten (optional mit weichem Leuchten)
+    ctx.save(); ctx.lineJoin = 'round';
+    if (glowBorders) { ctx.shadowColor = borders; ctx.shadowBlur = 7 * k; }
+    ctx.strokeStyle = borders; ctx.lineWidth = borderWidth * k;
+    for (const cn of EU_COUNTRIES) { ctx.beginPath(); traceCountry(ctx, cn, px); ctx.stroke(); }
+    ctx.strokeStyle = coast; ctx.lineWidth = borderWidth * 1.3 * k; ctx.beginPath(); for (const cn of EU_COUNTRIES) traceCountry(ctx, cn, px); ctx.stroke();
+    ctx.restore();
+    // Unter Regionen mit eigener Ebene die heutigen Grenzen löschen, damit nichts durchscheint
+    for (const r of regions.filter(r => r.layer)) {
+      ctx.save(); ctx.fillStyle = land; fillRegion(ctx, r.parts, px);
+      ctx.globalAlpha = texture; ctx.globalCompositeOperation = 'overlay'; ctx.fillStyle = ctx.createPattern(tt, 'repeat'); fillRegion(ctx, r.parts, px); ctx.restore();
+    }
+    if (graticule) {
+      ctx.strokeStyle = 'rgba(255,255,255,.05)'; ctx.lineWidth = 1.4 * k; ctx.beginPath();
+      for (let lon = Math.ceil(lon0 / 10) * 10; lon <= lon1; lon += 10) { const [x] = px(lon, 0); ctx.moveTo(x, 0); ctx.lineTo(x, Hh); }
+      for (let lat = Math.ceil(lat0 / 10) * 10; lat <= lat1; lat += 10) { const [, yy] = px(0, lat); ctx.moveTo(0, yy); ctx.lineTo(W, yy); }
+      ctx.stroke();
+    }
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 16;
+    const a = project(lon0, lat0), b = project(lon1, lat1);
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(b.x - a.x, a.z - b.z), new THREE.MeshBasicMaterial({ map: tex }));
+    plane.rotation.x = -Math.PI / 2; plane.position.set((a.x + b.x) / 2, y, (a.z + b.z) / 2); g.add(plane);
+    return W / (lon1 - lon0);
+  };
+  let pxPerDeg = paint(bbox, texW, 0);
+  if (detail) pxPerDeg = paint(detail.bbox, detail.texW, .003);
 
   // Regionen als eigene Ebene: Fläche + heller Umriss + weicher Innenschein, auf einen Ausschnitt begrenzt
   const layers = {};
   for (const r of regions.filter(r => r.layer)) {
     const [rl0, rb0, rl1, rb1] = r.layer.bbox, ry0 = mercY(rb0), ry1 = mercY(rb1);
-    const LW = Math.round(texW * (rl1 - rl0) / (lon1 - lon0) * (r.layer.res ?? 1.6)), LH = Math.round(LW * (ry1 - ry0) / (rl1 - rl0)), lk = LW / 4096 * (lon1 - lon0) / (rl1 - rl0);
+    const LW = Math.round(pxPerDeg * (rl1 - rl0) * (r.layer.res ?? 1.4)), LH = Math.round(LW * (ry1 - ry0) / (rl1 - rl0)), lk = LW / (rl1 - rl0) / 58.5;
     const lpx = (lon, lat) => [(lon - rl0) / (rl1 - rl0) * LW, (ry1 - mercY(lat)) / (ry1 - ry0) * LH];
     const mask = document.createElement('canvas'); mask.width = LW; mask.height = LH; const mg = mask.getContext('2d');
     mg.fillStyle = '#ffffff'; fillRegion(mg, r.parts, lpx);
