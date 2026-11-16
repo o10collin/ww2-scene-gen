@@ -15,6 +15,7 @@ export default {
     globeSize: { type: 'number', min: 2, max: 8, step: .05, value: 5, label: 'Globus Radius' },
     globeY: { type: 'number', min: -8, max: 4, step: .05, value: -2, label: 'Globus Höhe (− = tiefer)' },
     rotOffset: { type: 'number', min: -180, max: 180, step: 1, value: 0, label: 'Drehung Korrektur (°)' },
+    endTurn: { type: 'number', min: 0, max: 120, step: 1, value: 58, label: 'Drehung zum Atlantik (°)' },
     rotSpeed: { type: 'number', min: 0, max: 10, step: .1, value: 1.5, label: 'Grunddrehung (°/s)' },
     tilt: { type: 'number', min: -45, max: 45, step: 1, value: 16, label: 'Neigung (°)' },
     oceanColor: { type: 'color', value: '#0d1520', label: 'Ozean' },
@@ -80,7 +81,7 @@ export default {
     return {
       update(t, p) {
         // Blickpunkt: Pazifik -> USA -> Atlantik, mit gleichmäßiger Grunddrehung (keine Stopps)
-        const lon = 168 + p.rotSpeed * t + 88 * H.smooth(H.span(t, p.tAttack + 1.2, p.tUSA + 1.6)) + 44 * H.smooth(H.span(t, p.tDeclare - 1.1, p.tDeclare + 1.4));
+        const lon = 168 + p.rotSpeed * t + 88 * H.smooth(H.span(t, p.tAttack + 1.2, p.tUSA + 1.6)) + p.endTurn * H.smooth(H.span(t, p.tDeclare - 1.1, p.tDeclare + 1.4));
         g.rotation.y = (-90 - lon + p.rotOffset) * Math.PI / 180;
 
         // Japan ist von Beginn an markiert, Angriff mit Bogen
