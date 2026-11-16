@@ -990,6 +990,27 @@ function tracePolys(g, polys, W, Hh) {
     g.closePath();
   }
 }
+// Kartenpunkt wie in Apple Karten: weicher Schatten, weißer Ring, farbiger Kern (Textur je Farbe)
+const PIN_TEX = {};
+function pinTexture(color) {
+  if (PIN_TEX[color]) return PIN_TEX[color];
+  const S = 128, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d');
+  g.shadowColor = 'rgba(0,0,0,.55)'; g.shadowBlur = 14; g.shadowOffsetY = 3;
+  g.fillStyle = '#ffffff'; g.beginPath(); g.arc(S / 2, S / 2, S * .3, 0, Math.PI * 2); g.fill();
+  g.shadowColor = 'transparent';
+  const gr = g.createRadialGradient(S / 2 - 6, S / 2 - 8, 2, S / 2, S / 2, S * .22);
+  gr.addColorStop(0, new THREE.Color(color).lerp(new THREE.Color('#ffffff'), .35).getStyle()); gr.addColorStop(1, color);
+  g.fillStyle = gr; g.beginPath(); g.arc(S / 2, S / 2, S * .22, 0, Math.PI * 2); g.fill();
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; PIN_TEX[color] = t; return t;
+}
+function haloTexture() {
+  if (PIN_TEX._halo) return PIN_TEX._halo;
+  const S = 128, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d');
+  const gr = g.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+  gr.addColorStop(0, 'rgba(255,255,255,.55)'); gr.addColorStop(.7, 'rgba(255,255,255,.35)'); gr.addColorStop(.92, 'rgba(255,255,255,.6)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, S, S);
+  const t = new THREE.CanvasTexture(c); PIN_TEX._halo = t; return t;
+}
 const GLOBE_TEX = {};
 function globeTexture({ ocean, land, borders, coast, grid, W = 4096 }) {
   const key = [ocean, land, borders, coast, grid, W].join('|');
@@ -1049,6 +1070,25 @@ export function globe(R = 5, { ocean = '#0e1520', land = '#6a6f76', grid = true,
     m.userData.setAmount = a => { m.material.opacity = clamp(a, 0, 1); m.visible = a > .001; };
     g.add(m); return m;
   };
+  // Sichtbarkeit zur Kamera: 1 auf der zugewandten Seite, weich 0 zum Rand/zur Rückseite
+  const _wp = new THREE.Vector3(), _cp = new THREE.Vector3();
+  const facing = (obj, cam) => { obj.getWorldPosition(_wp); g.getWorldPosition(_cp); return smoothstep(.12, .35, _wp.sub(_cp).normalize().dot(cam.position.clone().sub(_cp).normalize())); };
+  // Kartenpunkt (Apple-Karten-Stil): flacher Kreis zur Kamera, optional pulsierender Halo; set({ scale, halo 0..1, opacity })
+  g.userData.pin = (lat, lon, color, { size = .3 } = {}) => {
+    const grp = new THREE.Group(); grp.position.copy(latLon(lat, lon, R * 1.004)); g.add(grp);
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTexture(), color, transparent: true, depthTest: false, depthWrite: false, opacity: 0 }));
+    const dot = new THREE.Sprite(new THREE.SpriteMaterial({ map: pinTexture(color), transparent: true, depthTest: false, depthWrite: false }));
+    halo.renderOrder = 8; dot.renderOrder = 9; grp.add(halo, dot);
+    const st = { scale: 1, halo: 0, opacity: 1 };
+    dot.onBeforeRender = (r, sc, cam) => {
+      const f = facing(grp, cam);
+      dot.material.opacity = st.opacity * f; dot.scale.setScalar(size * st.scale);
+      halo.material.opacity = st.opacity * f * (1 - st.halo) * .8; halo.scale.setScalar(size * st.scale * (1 + st.halo * 2.6)); halo.visible = st.halo > 0;
+    };
+    halo.onBeforeRender = dot.onBeforeRender;
+    grp.userData.set = o => Object.assign(st, o);
+    return grp;
+  };
   g.userData.marker = (lat, lon, color, r = .18) => {
     const m = mesh(new THREE.SphereGeometry(r, 12, 8), color); m.castShadow = false;
     m.position.copy(latLon(lat, lon, R)); g.add(m); return m;
@@ -1061,8 +1101,8 @@ export function globe(R = 5, { ocean = '#0e1520', land = '#6a6f76', grid = true,
     const geo = new THREE.TubeGeometry(curve, 64, radius, 6, false);
     const m = new THREE.Mesh(geo, glowMat(color, 1.8));
     m.userData.total = geo.index.count; m.userData.curve = curve;
-    const hd = head > 0 ? new THREE.Mesh(new THREE.SphereGeometry(head, 12, 8), glowMat(color, 3)) : null;
-    if (hd) g.add(hd);
+    const hd = head > 0 ? new THREE.Sprite(new THREE.SpriteMaterial({ map: pinTexture(new THREE.Color(color).getStyle()), transparent: true, depthTest: false, depthWrite: false })) : null;
+    if (hd) { hd.scale.setScalar(head * 3.2); hd.renderOrder = 9; hd.onBeforeRender = (r, sc, cam) => { hd.material.opacity = facing(hd, cam); }; g.add(hd); }
     m.userData.setProgress = u => {
       u = clamp(u, 0, 1);
       geo.setDrawRange(0, Math.floor(m.userData.total * u) - Math.floor(m.userData.total * u) % 6); m.visible = u > 0;
@@ -1075,14 +1115,9 @@ export function globe(R = 5, { ocean = '#0e1520', land = '#6a6f76', grid = true,
   g.userData.label = (text, lat, lon, opts = {}) => {
     const { lift = 1.16, size = .5, ...rest } = opts;
     const l = label(text, { size, color: '#f4f1ea', bg: 'rgba(14,18,26,.72)', depth: false, ...rest });
-    const n = latLon(lat, lon, 1), wp = new THREE.Vector3(), cp = new THREE.Vector3();
-    l.position.copy(n).multiplyScalar(R * lift); g.add(l);
+    l.position.copy(latLon(lat, lon, R * lift)); g.add(l);
     l.userData.show = 0;
-    l.onBeforeRender = (r, sc, cam) => {
-      l.getWorldPosition(wp); g.getWorldPosition(cp);
-      const facing = wp.sub(cp).normalize().dot(cam.position.clone().sub(cp).normalize());
-      l.material.opacity = l.userData.show * smoothstep(.2, .45, facing);
-    };
+    l.onBeforeRender = (r, sc, cam) => { l.material.opacity = l.userData.show * facing(l, cam); };
     return l;
   };
   g.userData.R = R;
