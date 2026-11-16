@@ -344,7 +344,7 @@ export function animateFigures(t) {
   }
 }
 
-export function figure({ color = P.grey, head = P.skin, helmet = null, scale = 1, glow = null, strength = ROLE.strength, model = 'auto', pose = null, seed = 0, loopPose = false, clips = null } = {}) {
+export function figure({ color = P.grey, head = P.skin, helmet = null, scale = 1, glow = null, strength = ROLE.strength, model = 'auto', pose = null, seed = 0, loopPose = false, clips = null, weapon = null } = {}) {
   const g = new THREE.Group();
   const gm = glow ? glowMat(glow, strength) : null;
   const groupKey = model === 'auto' ? (helmet ? 'soldier' : 'civil') : model;
@@ -379,7 +379,32 @@ export function figure({ color = P.grey, head = P.skin, helmet = null, scale = 1
       if (!actions[name]) name = g.userData.idleName;
       for (const [nm, a] of Object.entries(actions)) { const on = nm === name; a.enabled = on; a.paused = false; a.setEffectiveWeight(on ? weight : 0); }
       mixer.setTime(time);                                                            // Einmal-Clips bleiben am Ende stehen (clampWhenFinished), beim Zurückspulen wieder frei
+      if (gun) placeGun();
     };
+    // Gewehr in der Hand: jedes Bild aus den Handknochen gesetzt. Beide Hände nah beieinander (Gewehr-Clips) ->
+    // Lauf von der rechten zur linken Hand; sonst einhändig entlang des Unterarms nach vorn-unten getragen.
+    let gun = null, placeGun = null;
+    if (weapon) {
+      const bR = inst.getObjectByName(M.prefix + 'RightHand'), bL = inst.getObjectByName(M.prefix + 'LeftHand'), bF = inst.getObjectByName(M.prefix + 'RightForeArm');
+      if (bR && bL && bF) {
+        gun = rifle(weapon === true ? '#2b2620' : weapon); g.add(gun);
+        const pR = new THREE.Vector3(), pL = new THREE.Vector3(), pF = new THREE.Vector3(), d = new THREE.Vector3(), fwd = new THREE.Vector3();
+        placeGun = () => {
+          g.updateMatrixWorld(true);
+          bR.getWorldPosition(pR); bL.getWorldPosition(pL); bF.getWorldPosition(pF);
+          const sc = g.getWorldScale(d).x;
+          gun.scale.setScalar(1);
+          gun.position.copy(g.worldToLocal(pR.clone()));
+          if (pR.distanceTo(pL) < .62 * sc) gun.lookAt(pL.clone().sub(pR).multiplyScalar(4).add(pR));
+          else {
+            fwd.set(1, 0, 0).transformDirection(g.matrixWorld);                         // Blickrichtung der Figur
+            d.copy(pR).sub(pF).normalize().add(fwd.multiplyScalar(1.4)).normalize();
+            gun.lookAt(pR.clone().add(d));
+          }
+        };
+        g.userData.muzzle = (target = new THREE.Vector3()) => gun.userData.tip.getWorldPosition(target);
+      }
+    }
     g.userData.walk = (t, amp = 1) => {
       g.userData.drivenFrame = frameId + 1;
       g.userData.play(amp > 1.1 ? rc.run : rc.walk, t * (0.9 + amp * .3) + g.userData.offset, 1);
@@ -422,6 +447,17 @@ export function figure({ color = P.grey, head = P.skin, helmet = null, scale = 1
   return g;
 }
 
+// Gewehr (Karabiner) mit Schaft, Lauf und Riemenbügel; Ursprung am Griff, Mündung in +Z (userData.tip)
+export function rifle(color = '#2b2620') {
+  const g = new THREE.Group(), wood = new THREE.MeshLambertMaterial({ color }), metal = new THREE.MeshLambertMaterial({ color: '#15171b' });
+  const part = (w, h, l, z, y, m) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, l), m); b.position.set(0, y, z); b.castShadow = true; g.add(b); return b; };
+  part(.05, .09, .36, -.2, -.02, wood);        // Kolben
+  part(.045, .06, .5, .2, 0, wood);             // Schaft
+  part(.028, .028, .42, .56, .02, metal);       // Lauf
+  part(.03, .05, .1, .05, .045, metal);         // Verschluss
+  const tip = new THREE.Object3D(); tip.position.set(0, .02, .78); g.add(tip); g.userData.tip = tip;
+  return g;
+}
 export function tank(color = P.grey, glow = null) {
   const g = new THREE.Group();
   if (glow) color = glowMat(glow);
