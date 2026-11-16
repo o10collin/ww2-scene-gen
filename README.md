@@ -92,6 +92,16 @@ roten Flächen für gegnerisches Gebiet, gesperrten Ländernamen und leuchtenden
 „Global → Bild / Look / Text“ einstellbar, der frühere helle Comic-Look ist über Shading „toon“,
 Abdunkeln 0 und Bloom 0 wieder erreichbar.
 
+## Historische Karte (Szene 3)
+
+`js/map-hi.js` (`hiMap`) zeichnet Europa aus Natural-Earth-Daten 1:50m (`js/geo-europe.js`, gemeinfrei) als Textur in
+Mercator-Projektion: Meer, Land mit Geländestruktur, Grenzen, Küsten, Gradnetz. Historische Gebiete entstehen aus
+heutigen Ländern, bei Bedarf mit einem Polygon beschnitten. Szene 3 zeigt so das Großdeutsche Reich Ende 1942
+(Deutschland, Österreich, Böhmen und Mähren, annektierte Teile Polens, Ostpreußen mit Memelland, Elsass-Lothringen,
+Luxemburg, Nord-Slowenien) als eigene Ebene mit Umriss, besetzte Gebiete schraffiert, Verbündete der Achse gedämpft,
+die Ostfront vom November 1942 und historisch verortete Pfeile (Bomberangriffe auf Köln und Hamburg, Operation Torch,
+El Alamein, Stalingrad, Rschew, Woronesch). Die Grenzen sind für die Darstellung vereinfacht.
+
 ## Untertitel
 
 „Global → Untertitel“ zeigt den Skripttext der Szene („Szene → Untertitel / Skript“) als Untertitel. Einstellbar:
