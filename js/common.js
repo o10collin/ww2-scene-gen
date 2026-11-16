@@ -112,6 +112,12 @@ export function sky(scene, color, fogNear = 30, fogFar = 90) {
 }
 
 // ---------- Beschriftung (Sprite aus Canvas) ----------
+// Schrift der Bauchbinde (Global → Text → Schrift), damit 3D-Beschriftungen dazu passen; main.js setzt sie vor dem Szenenaufbau
+let labelFamily = "'Inter', Arial, sans-serif";
+export function setLabelFont(name) {
+  labelFamily = name === 'Inter' ? "'Inter', Arial, sans-serif" : name === 'Cormorant Garamond' ? "'Cormorant Garamond', Georgia, serif" : `'${name}', serif`;
+}
+export const labelFont = (px = 60, weight = 500) => `${weight} ${px}px ${labelFamily}`;
 export function label(text, { color = '#f4f1ea', size = 1, font = "500 60px 'Cormorant Garamond', Georgia, serif", bg = null, pad = 24, depth = false, spacing = 0, upper = false, shadow = true } = {}) {
   if (upper) text = text.toUpperCase();
   const c = document.createElement('canvas');

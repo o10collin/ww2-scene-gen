@@ -74,7 +74,7 @@ const GLOBAL_SCHEMA = {
   fps: { type: 'select', options: ['24', '25', '30', '50', '60'], value: '30', label: 'Bilder/s', group: 'Export' },
   bitrate: { type: 'number', min: 2, max: 80, step: 1, value: 20, label: 'Bitrate (Mbit/s)', group: 'Export' }
 };
-const REBUILD_GLOBAL = new Set(['shading', 'lowPoly', 'shadows', 'darken', 'roleAxis', 'roleWest', 'roleSoviet', 'roleCivil', 'glowStrength', 'figures', 'textOff']);
+const REBUILD_GLOBAL = new Set(['shading', 'lowPoly', 'shadows', 'darken', 'roleAxis', 'roleWest', 'roleSoviet', 'roleCivil', 'glowStrength', 'figures', 'textOff', 'captionFont']);
 const RESOLUTION_GLOBAL = new Set(['preset', 'width', 'height']);
 
 const LOOK_VERSION = '7';  // bei Änderung der Standard-Optik gespeicherte Globaleinstellungen verwerfen
@@ -181,7 +181,7 @@ function loadScene(i, keepTime = false) {
   const def = SCENES[i];
   const params = active && active.def === def ? active.params : paramsFor(def);
   H.setShading(global.shading);
-  H.setLowPoly(global.lowPoly);
+  H.setLowPoly(global.lowPoly); H.setLabelFont(global.captionFont);
   H.setFigureMode(global.figures.startsWith('GLB') ? 'glb' : 'capsule');
   H.setLabels(!global.textOff);
   H.setRoles({ axis: global.roleAxis, west: global.roleWest, soviet: global.roleSoviet, civil: global.roleCivil, strength: global.glowStrength });

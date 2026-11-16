@@ -22,7 +22,7 @@ export default {
     spaceColor: { type: 'color', value: '#06080c', label: 'Hintergrund' },
     atmosphere: { type: 'boolean', value: true, label: 'Atmosphärensaum' },
     labels: { type: 'boolean', value: true, label: 'Beschriftungen' },
-    dates: { type: 'boolean', value: true, label: 'Datumsangaben an den Bögen' },
+    labelSize: { type: 'number', min: .2, max: 1.5, step: .01, value: .4, label: 'Beschriftung Größe' },
     tAttack: { type: 'number', min: 0, max: 10, step: .1, value: .7, label: 'Angriff ab (s)' },
     tUSA: { type: 'number', min: 0, max: 10, step: .1, value: 2.9, label: 'USA ab (s)' },
     tDeclare: { type: 'number', min: 0, max: 10, step: .1, value: 6.3, label: 'Kriegserklärung ab (s)' },
@@ -65,17 +65,12 @@ export default {
 
     // Beschriftungen
     const labels = [];
-    const L = (txt, ll, from, o = {}) => { if (!p.labels) return; const l = U.label(txt, ll[0], ll[1], { size: .62 * k * (o.scale || 1), lift: 1 + .14 * (o.lift || 1), ...o.style }); labels.push({ l, from }); };
+    const L = (txt, ll, from, o = {}) => { if (!p.labels) return; const l = U.label(txt, ll[0], ll[1], { size: p.labelSize * k * (o.scale || 1), lift: 1 + .14 * (o.lift || 1), font: H.labelFont(60, 500) }); labels.push({ l, from }); };
     L('Japan', [TOKIO[0] + 9, TOKIO[1] + 4], () => p.tAttack - .3);
     L('Pearl Harbor', [PEARL[0] + 3, PEARL[1] + 15], () => p.tAttack + 1.2);
-    L('USA', USA_C, () => p.tUSA + .3, { scale: 1.25 });
+    L('USA', USA_C, () => p.tUSA + .3, { scale: 1.15 });
     L('Deutschland', [BERLIN[0] + 2, BERLIN[1] + 13], () => p.tDeclare);
     L('Italien', [ROM[0] - 6, ROM[1] + 6], () => p.tDeclare + .4);
-    if (p.labels && p.dates) {
-      const dateStyle = { style: { font: "italic 500 60px 'Cormorant Garamond', Georgia, serif", bg: null, color: '#e9d7b4' } };
-      L('7. Dezember 1941', [46, -168], () => p.tAttack + 1.4, { scale: .9, lift: 1.6, ...dateStyle });
-      L('11. Dezember 1941', [38, -36], () => p.tDeclare + 1.6, { scale: .9, lift: 1.5, ...dateStyle });
-    }
 
     return {
       update(t, p) {
