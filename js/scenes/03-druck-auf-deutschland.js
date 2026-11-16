@@ -52,7 +52,7 @@ export default {
     alliesAxisColor: { type: 'color', value: '#5e3a37', label: 'Verbündete der Achse' },
     labelFont: { type: 'select', options: ['Cormorant Garamond (Serif)', 'wie Bauchbinde'], value: 'wie Bauchbinde', label: 'Schrift Beschriftung' },
     labels: { type: 'boolean', value: true, label: 'Beschriftung' },
-    labelSize: { type: 'number', min: .3, max: 3, step: .05, value: 1.35, label: 'Beschriftung Größe' },
+    labelSize: { type: 'number', min: .3, max: 4, step: .05, value: 2.1, label: 'Beschriftung Größe' },
     ...H.cameraParams([0, 26, 20], [0, 21, 14], [0.5, 0, -2], 38)
   },
   build({ scene, params: p, rng: r }) {

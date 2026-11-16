@@ -14,19 +14,22 @@ export default {
     snow: { type: 'number', min: 0, max: 6000, step: 100, value: 2600, label: 'Schneeflocken' },
     details: { type: 'boolean', value: true, label: 'Straßendetails (Laternen, Draht, Krater)' },
     speed: { type: 'number', min: 0, max: 2, step: .05, value: 1, label: 'Lauftempo (1 = Joggen, ca. 3 m/s)' },
-    skyColor: { type: 'color', value: '#0c1118', label: 'Himmel' },
-    snowColor: { type: 'color', value: '#a9b6c6', label: 'Schnee' },
+    skyColor: { type: 'color', value: '#101722', label: 'Himmel' },
+    snowColor: { type: 'color', value: '#7e8a9b', label: 'Schnee' },
+    fires: { type: 'number', min: 0, max: 10, step: 1, value: 5, label: 'Brände in den Ruinen' },
     germanColor: { type: 'color', value: '#6f7480', label: 'Deutsche' },
     sovietColor: { type: 'color', value: '#c8392e', label: 'Rote Armee' },
-    sovietGlowColor: { type: 'color', value: '#8a5c08', label: 'Rote Armee Leuchtfarbe (dunkleres Gelb)' },
+    sovietGlowColor: { type: 'color', value: '#b37b0e', label: 'Rote Armee Leuchtfarbe (dunkleres Gelb)' },
     glow: { type: 'boolean', value: true, label: 'Figuren leuchten (Rollenfarben)' },
-    ...H.cameraParams([-8, 18, 14], [-2, 15, 10], [3, 0, -1], 40)
+    // Blick die Straße entlang (wie Szene 1: niedrig, filmisch): Deutsche fliehen auf die Kamera zu, die Kamera weicht zurück
+    ...H.cameraParams([-13, 5.2, 1.5], [-25, 4.6, 1.2], [8, 1.4, 0], 40)
   },
   build({ scene, params: p, rng: r, shadows }) {
-    H.sky(scene, p.skyColor, 14, 60);
-    H.lights(scene, { sun: [-6, 12, 8], intensity: .5, hemi: .5, shadows, skyColor: '#8fa3bb', groundColor: '#223', shadowSize: 40 });
-    H.lightPool(scene, { x: 2, z: 0, radius: 14, height: 30, intensity: 200 });
+    H.sky(scene, p.skyColor, 26, 85);
+    H.lights(scene, { sun: [-10, 14, 8], intensity: 1.0, hemi: .6, shadows, skyColor: '#9fb3c8', groundColor: '#111', shadowSize: 50 });
+    H.lightPool(scene, { x: -4, z: 0, radius: 18, height: 34, intensity: 230 });
     scene.add(H.ground(200, p.snowColor));
+    const fires = [];
     // Straße mit Ruinen links und rechts
     for (let i = 0; i < p.ruins; i++) {
       const side = i % 2 ? 1 : -1;
@@ -40,7 +43,8 @@ export default {
       const bb = new THREE.Box3().setFromObject(ru);
       if (side > 0 && bb.min.z < 5.4) ru.position.z += 5.4 - bb.min.z;
       if (side < 0 && bb.max.z > -5.4) ru.position.z -= bb.max.z + 5.4;
-      if (r() < .4) { const s = H.smokeColumn(r, { height: 9, width: 1 }); s.position.set(ru.position.x, h * .5, ru.position.z); scene.add(s); ru.userData.smoke = s; }
+      if (r() < .45) { const s = H.smokeColumn(r, { height: 11, width: 1.1, color: '#3a3836' }); s.position.set(ru.position.x, h * .5, ru.position.z); scene.add(s); ru.userData.smoke = s; }
+      if (fires.length < p.fires && r() < .55) { const f = H.flame(r, { size: .9 + r() * .6 }); f.position.set(ru.position.x + (r() - .5) * w * .4, 0, ru.position.z - side * d * .2); scene.add(f); fires.push(f); }
     }
     const smokes = []; scene.traverse(o => { if (o.userData.smoke) smokes.push(o.userData.smoke); });
     // Straße frei halten: Trümmer, Fässer, Kisten, Sandsäcke und Wrack stehen am Rand (|z| > 5), die Panzer fahren in
@@ -57,7 +61,7 @@ export default {
     const laneSpeed = LANES.map(() => 2.7 + r() * .7);                                    // m/s je Bahn
     const soviet = p.sovietGlowColor;
     const runner = (lane, row, clip, color, helmet, glow, xBase, seed) => {
-      const f = H.figure({ color, helmet, glow, clips: { idle: 'Rifle_Idle', walk: clip, run: clip }, seed, weapon: true });
+      const f = H.figure({ color, helmet, glow, strength: 1.5, clips: { idle: 'Rifle_Idle', walk: clip, run: clip }, seed, weapon: true });
       f.rotation.y = Math.PI; scene.add(f);
       return { f, clip, x0: xBase + row * 3.4 + r() * .6 + (lane % 2) * 1.1, z: LANES[lane] + (r() - .5) * .12, v: laneSpeed[lane], amp: 1.3 };
     };
@@ -126,7 +130,7 @@ export default {
       booms.push({ b, t0 });
       if (tk) tk.shots.push({ ts: t0 - .25, at: b.position.clone() });
     }
-    const flakes = p.snow > 0 ? H.particles(r, { count: p.snow, area: [60, 20, 40], color: '#ffffff', size: .14 }) : null;
+    const flakes = p.snow > 0 ? H.particles(r, { count: p.snow, area: [60, 20, 40], color: '#e8eef6', size: .07, opacity: .8 }) : null;
     if (flakes) scene.add(flakes);
     if (p.details) {
       for (let i = 0; i < 5; i++) { const l = H.streetLamp(4.2, { lit: i === 2 }); l.position.set(-26 + i * 12, 0, 6.2); l.rotation.z = (r() - .5) * .25; scene.add(l); }
@@ -183,6 +187,7 @@ export default {
         for (const b of booms) b.b.userData.at(t - b.t0);
         if (flakes) flakes.userData.drift(t, [.6, -1.8, 0], .6);
         for (const s of smokes) s.userData.at(t, .6);
+        for (const f of fires) f.userData.at(t);
       }
     };
   }
