@@ -47,8 +47,8 @@ export default {
     pulse: { type: 'number', min: 0, max: 1, step: .05, value: .35, label: 'Reich pulsiert (Druck)' },
     arrowSize: { type: 'number', min: .3, max: 3, step: .05, value: 1, label: 'Pfeilstärke' },
     front: { type: 'boolean', value: true, label: 'Ostfront einzeichnen' },
-    landColor: { type: 'color', value: '#6f747c', label: 'Land' },
-    seaColor: { type: 'color', value: '#0d1520', label: 'Meer' },
+    landColor: { type: 'color', value: '#5c6476', label: 'Land' },
+    seaColor: { type: 'color', value: '#080d16', label: 'Meer' },
     borderColor: { type: 'color', value: '#ebeef4', label: 'Grenzen' },
     germanyColor: { type: 'color', value: '#ff2d2d', label: 'Deutsches Reich' },
     tint: { type: 'boolean', value: false, label: 'Bündnisse/Besatzung einfärben' },
@@ -64,7 +64,6 @@ export default {
     H.lights(scene, { sun: [10, 30, 10], intensity: 1.3, hemi: .5, shadows: false, skyColor: '#cfd8e3', groundColor: '#222' });
     const tint = p.tint ? [
       { parts: SOVIET, color: H.ROLE.soviet, alpha: .16 },
-      { parts: BRITAIN, color: H.ROLE.west, alpha: .22 },
       { parts: AXIS_ALLIES, color: p.alliesAxisColor, alpha: .45 },
       { parts: OCCUPIED, color: p.occupiedColor, alpha: .3, hatch: '#d9b0a8', hatchAlpha: .22 }
     ] : [];
@@ -75,11 +74,13 @@ export default {
       font: p.labelFont.startsWith('Cormorant') ? "'Cormorant Garamond', Georgia, serif" : null,
       regions: [
         ...tint,
-        { name: 'reich', parts: REICH_1942, color: p.germanyColor, alpha: .62, outline: '#ffffff', outlineWidth: 2.4, layer: { bbox: [4.5, 44.8, 25, 56.6], pivot: [13.5, 51.3] } }
+        { name: 'uk', parts: BRITAIN, color: H.ROLE.west, alpha: .8, outline: '#ffffff', outlineWidth: 2, layer: { bbox: [-11, 49.6, 2.5, 61.2] } },
+        { name: 'reich', parts: REICH_1942, color: p.germanyColor, alpha: .82, outline: '#ffffff', outlineWidth: 2.4, layer: { bbox: [4.5, 44.8, 25, 56.6], pivot: [13.5, 51.3] } }
       ]
     });
     scene.add(map);
     const U = map.userData, reich = U.layers.reich, P = ([lon, lat]) => U.project(lon, lat);
+    U.layers.uk.userData.mesh.material.color.setScalar(1.25);   // kräftig wie die Länderflächen auf dem Globus
 
     const front = p.front ? U.line(FRONT, '#e8c27a', { radius: .03, strength: 1.1 }) : null;
     const arrows = ARROWS.map(([side, t0, pts]) => {
@@ -109,7 +110,7 @@ export default {
         // Druck: Fläche pulsiert heller, sobald die Pfeile ankommen (keine Größenänderung, damit der Umriss
         // deckungsgleich mit den Grenzen der Karte bleibt)
         const k = 1 + p.pulse * H.span(t, 2, 3.5) * (.25 + .25 * H.pulse(t, 1.1));
-        reich.userData.mesh.material.color.setScalar(k);
+        reich.userData.mesh.material.color.setScalar(1.15 * k);
         if (front) front.userData.setProgress(H.span(t, .4, 2.4));
         for (const { a, t0 } of arrows) a.userData.setProgress(H.span(t, t0, t0 + 1.8));
         berlin.userData.set({ halo: t > 2 ? ((t - 2) % 1.6) / 1.6 : 0 });
