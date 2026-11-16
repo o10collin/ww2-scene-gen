@@ -221,3 +221,14 @@ export function hiMap({
   };
   return g;
 }
+
+// Maske eines Gebiets (weiß auf transparent) für einen Ausschnitt bbox = [lon0, lat0, lon1, lat1] in Mercator,
+// z. B. als alphaMap für Flächen, die sich per Shader verändern (besetztes Gebiet hinter einer wandernden Front)
+export function regionMaskTexture(parts, bbox, W = 2048) {
+  const [lon0, lat0, lon1, lat1] = bbox, my0 = mercY(lat0), my1 = mercY(lat1);
+  const Hh = Math.round(W * (my1 - my0) / (lon1 - lon0));
+  const px = (lon, lat) => [(lon - lon0) / (lon1 - lon0) * W, (my1 - mercY(lat)) / (my1 - my0) * Hh];
+  const c = document.createElement('canvas'); c.width = W; c.height = Hh; const g = c.getContext('2d');
+  g.fillStyle = '#ffffff'; fillRegion(g, parts, px);
+  const t = new THREE.CanvasTexture(c); t.anisotropy = 8; return t;
+}
