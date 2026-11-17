@@ -14,18 +14,19 @@ export default {
     slogan: { type: 'text', value: 'Totaler Krieg – kürzester Krieg', label: 'Spruchband' },
     speakerGlow: { type: 'boolean', value: true, label: 'Redner leuchtet rot' },
     crowdGlow: { type: 'boolean', value: true, label: 'Publikum als weiße Silhouetten' },
-    wallColor: { type: 'color', value: '#3a404c', label: 'Wand' },
+    wallColor: { type: 'color', value: '#55607a', label: 'Wand' },
     crowdColor: { type: 'color', value: '#5b5f6a', label: 'Publikum' },
     tRaise: { type: 'number', min: 0, max: 10, step: .1, value: 3.8, label: 'Arme hoch ab (s)' },
-    spotIntensity: { type: 'number', min: 0, max: 600, step: 10, value: 170, label: 'Scheinwerfer' },
+    spotIntensity: { type: 'number', min: 0, max: 600, step: 10, value: 220, label: 'Scheinwerfer' },
     ...H.cameraParams([0, 2.6, 24], [0, 4, 15], [0, 3, -8], 42)
   },
   build({ scene, params: p, rng: r, shadows }) {
     // Berliner Sportpalast, 18. Februar 1943 (Stil wie Szene 1: blaugraue Halle, Low-Poly, Lichtkegel)
-    H.sky(scene, '#0d1219', 26, 80);
-    H.lights(scene, { sun: [0, 14, 6], intensity: .6, hemi: .8, shadows, skyColor: '#8fa3bb', groundColor: '#111', shadowSize: 30 });
-    H.lightPool(scene, { x: 0, z: -6, radius: 14, height: 24, intensity: 200 });
-    scene.add(H.ground(120, '#1a1e26'));
+    H.sky(scene, '#1c2533', 30, 90);
+    H.lights(scene, { sun: [0, 14, 6], intensity: 1.0, hemi: 1.3, shadows, skyColor: '#b4c4d8', groundColor: '#2a2e36', shadowSize: 30 });
+    H.lightPool(scene, { x: 0, z: -6, radius: 16, height: 24, intensity: 320 });
+    H.lightPool(scene, { x: 0, z: 4, radius: 14, height: 24, intensity: 200 });   // Saal
+    scene.add(H.ground(120, '#2e3542'));
     // Texturen: Hakenkreuzfahne (historisch: rotes Tuch, weiße Scheibe, schwarzes, um 45° gedrehtes Hakenkreuz) und Spruchband
     const swastika = (g, cx, cy, sz, color) => {
       g.save(); g.translate(cx, cy); g.rotate(Math.PI / 4); g.fillStyle = color;
@@ -54,11 +55,11 @@ export default {
     // Halle: Rückwand, Galerien mit Brüstung, Deckenträger
     const wall = H.box(60, 24, 1, p.wallColor); wall.position.set(0, 12, -14); scene.add(wall);
     for (const side of [-1, 1]) {
-      const gal = H.box(6, .6, 40, '#252a33'); gal.position.set(side * 19, 6.5, -2); scene.add(gal);
+      const gal = H.box(6, .6, 40, '#3a4352'); gal.position.set(side * 19, 6.5, -2); scene.add(gal);
       const rail = H.box(.25, 1.2, 40, '#30353f'); rail.position.set(side * 16.1, 7.4, -2); scene.add(rail);
-      for (let i = 0; i < 7; i++) { const col = H.box(.9, 24, .9, '#1a1d24'); col.position.set(side * 22, 12, 8 - i * 6); scene.add(col); }
+      for (let i = 0; i < 7; i++) { const col = H.box(.9, 24, .9, '#2c3340'); col.position.set(side * 22, 12, 8 - i * 6); scene.add(col); }
     }
-    for (let i = 0; i < 6; i++) { const beam = H.box(46, .8, .8, '#1e222a'); beam.position.set(0, 22, 6 - i * 4.5); scene.add(beam); }
+    for (let i = 0; i < 6; i++) { const beam = H.box(46, .8, .8, '#2c3340'); beam.position.set(0, 22, 6 - i * 4.5); scene.add(beam); }
     // Fahnen an der Rückwand und Spruchband über der Bühne
     for (let i = 0; i < p.banners; i++) {
       const x = (i - (p.banners - 1) / 2) * 6.2;
@@ -68,7 +69,7 @@ export default {
     band.position.set(0, 4.9, -13.3); scene.add(band);
     // Bühne, Rednerpult mit Hakenkreuz, Mikrofone
     const SH = 2.6;   // hohe Bühne, damit der Redner über dem Publikum steht
-    const stage = H.box(22, SH, 6, '#2c3038'); stage.position.set(0, SH / 2, -9); scene.add(stage);
+    const stage = H.box(22, SH, 6, '#3d4554'); stage.position.set(0, SH / 2, -9); scene.add(stage);
     const podium = H.box(1.5, .95, .8, '#3a2f28'); podium.position.set(0, SH + .475, -7.9); scene.add(podium);
     const emblem = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1), new THREE.MeshLambertMaterial({ map: flagTex(256, 256, 128), emissive: '#ffffff', emissiveMap: flagTex(256, 256, 128), emissiveIntensity: .1 }));
     emblem.scale.setScalar(.7); emblem.position.set(0, SH + .5, -7.49); scene.add(emblem);
@@ -102,7 +103,7 @@ export default {
         speaker.position.y = 2.6 + Math.abs(Math.sin(t * 5)) * .03;
         for (const c of crowd) {
           const up = H.easeOut(H.span(t, p.tRaise + c.delay, p.tRaise + c.delay + .6));
-          if (up > 0) c.f.userData.pose(c.ph > 3 ? 'High_Enthusiasm_Fist_Pump' : 'Super_Excited', t - (p.tRaise + c.delay) + c.ph);
+          if (up > 0) c.f.userData.pose(c.ph > 3 ? 'Pumping_A_Fist' : 'Super_Excited'   /* beide im Stehen (Fist_Pump-Clip war im Sitzen) */, t - (p.tRaise + c.delay) + c.ph);
           c.f.position.y = Math.sin(t * 2 + c.ph) * .03 * (1 + up * 3);
           c.arms[0].rotation.z = -up * (2.6 + Math.sin(t * 6 + c.ph) * .15);
           c.arms[1].rotation.z = up * .2;
