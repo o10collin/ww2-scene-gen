@@ -52,8 +52,9 @@ function outlineOf(mask, width, color) {
 export function hiMap({
   bbox = [-14, 27, 56, 67], center = [15, 50], scale = .5, texW = 4096, detail = null,
   sea = '#151c25', land = '#6c7178', borders = 'rgba(225,230,238,.35)', coast = 'rgba(255,255,255,.28)',
-  regions = [], graticule = true, borderWidth = 1.6, glowBorders = false, font = null, texture = .22
+  regions = [], graticule = true, borderWidth = 1.6, glowBorders = false, font = null, texture = .22, groups = null
 } = {}) {
+  const gb = groups ? groupBorders(groups) : null;   // historische Grenzen: nur Linien zwischen verschiedenen Gebieten
   const g = new THREE.Group();
   const project = (lon, lat, y = 0) => new THREE.Vector3((lon - center[0]) * scale, y, -(mercY(lat) - mercY(center[1])) * scale);
   const tt = terrainTexture().image;
@@ -70,7 +71,8 @@ export function hiMap({
     ctx.save(); ctx.globalAlpha = texture * .5; ctx.globalCompositeOperation = 'soft-light'; ctx.fillStyle = ctx.createPattern(tt, 'repeat'); ctx.fillRect(0, 0, W, Hh); ctx.restore();
     // Land mit leichtem Schatten und Geländestruktur
     ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = 6 * k; ctx.shadowOffsetX = 2 * k; ctx.shadowOffsetY = 3 * k; ctx.fillStyle = land;
-    for (const cn of EU_COUNTRIES) { ctx.beginPath(); traceCountry(ctx, cn, px); ctx.fill('evenodd'); }
+    if (gb) { ctx.beginPath(); for (const cn of EU_COUNTRIES) traceCountry(ctx, cn, px); ctx.fill('nonzero'); }
+    else for (const cn of EU_COUNTRIES) { ctx.beginPath(); traceCountry(ctx, cn, px); ctx.fill('evenodd'); }
     ctx.restore();
     ctx.save(); ctx.beginPath(); for (const cn of EU_COUNTRIES) traceCountry(ctx, cn, px); ctx.clip('nonzero');
     ctx.globalAlpha = texture; ctx.globalCompositeOperation = 'overlay'; ctx.fillStyle = ctx.createPattern(tt, 'repeat'); ctx.fillRect(0, 0, W, Hh); ctx.restore();
@@ -82,9 +84,16 @@ export function hiMap({
     // Grenzen und Küsten (optional mit weichem Leuchten)
     ctx.save(); ctx.lineJoin = 'round';
     if (glowBorders) { ctx.shadowColor = borders; ctx.shadowBlur = 7 * k; }
-    ctx.strokeStyle = borders; ctx.lineWidth = borderWidth * k;
-    for (const cn of EU_COUNTRIES) { ctx.beginPath(); traceCountry(ctx, cn, px); ctx.stroke(); }
-    ctx.strokeStyle = coast; ctx.lineWidth = borderWidth * 1.3 * k; ctx.beginPath(); for (const cn of EU_COUNTRIES) traceCountry(ctx, cn, px); ctx.stroke();
+    if (gb) {
+      const seg = list => { ctx.beginPath(); for (let i = 0; i < list.length; i += 4) { const [x0, y0] = px(list[i], list[i + 1]), [x1, y1] = px(list[i + 2], list[i + 3]); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); } ctx.stroke(); };
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = borders; ctx.lineWidth = borderWidth * k; seg(gb.border);
+      ctx.strokeStyle = coast; ctx.lineWidth = borderWidth * 1.3 * k; seg(gb.coast);
+    } else {
+      ctx.strokeStyle = borders; ctx.lineWidth = borderWidth * k;
+      for (const cn of EU_COUNTRIES) { ctx.beginPath(); traceCountry(ctx, cn, px); ctx.stroke(); }
+      ctx.strokeStyle = coast; ctx.lineWidth = borderWidth * 1.3 * k; ctx.beginPath(); for (const cn of EU_COUNTRIES) traceCountry(ctx, cn, px); ctx.stroke();
+    }
     ctx.restore();
     // Unter Regionen mit eigener Ebene die heutigen Grenzen löschen, damit nichts durchscheint
     for (const r of regions.filter(r => r.layer)) {
@@ -231,4 +240,76 @@ export function regionMaskTexture(parts, bbox, W = 2048) {
   const c = document.createElement('canvas'); c.width = W; c.height = Hh; const g = c.getContext('2d');
   g.fillStyle = '#ffffff'; fillRegion(g, parts, px);
   const t = new THREE.CanvasTexture(c); t.anisotropy = 8; return t;
+}
+
+// ---------- Historische Grenzen aus Gebietsgruppen ----------
+// groups: [[{ c, clip? }, …], …] – jede Gruppe ist ein damaliges Gebiet aus (Teilen) heutiger Länder. Jedes Stück
+// heutiger Grenze/Küste wird geprüft: Liegen beide Seiten im selben Gebiet, entfällt die Linie; sonst Grenze bzw. Küste.
+// Kanten der Schnittpolygone kommen als neue Grenzen dazu, wo sie zwei verschiedene Gebiete trennen.
+// Punkt-in-Ring mit Streifenindex: Kanten je 0,25°-Breitenstreifen vorsortiert (große Ringe wie Russland)
+const BANDS = new WeakMap(), BAND = .25;
+function ringBands(r) {
+  let b = BANDS.get(r); if (b) return b;
+  b = new Map();
+  for (let i = 0, j = r.length - 2; i < r.length; j = i, i += 2) {
+    const y0 = Math.min(r[i + 1], r[j + 1]) / 50, y1 = Math.max(r[i + 1], r[j + 1]) / 50;
+    for (let k = Math.floor(y0 / BAND); k <= Math.floor(y1 / BAND); k++) { let a = b.get(k); if (!a) b.set(k, a = []); a.push(i, j); }
+  }
+  BANDS.set(r, b); return b;
+}
+function inRing(r, x, y) {
+  const e = ringBands(r).get(Math.floor(y / BAND)); if (!e) return false;
+  let c = false;
+  for (let n = 0; n < e.length; n += 2) { const i = e[n], j = e[n + 1], xi = r[i] / 50, yi = r[i + 1] / 50, xj = r[j] / 50, yj = r[j + 1] / 50; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; }
+  return c;
+}
+function inPolyLL(pts, x, y) { let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, yi] = pts[i], [xj, yj] = pts[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; }
+const POLY_BB = new Map();
+function polyBB(poly) {
+  if (POLY_BB.has(poly)) return POLY_BB.get(poly);
+  let a = 1e9, b = 1e9, c = -1e9, d = -1e9; const r = poly[0];
+  for (let i = 0; i < r.length; i += 2) { a = Math.min(a, r[i] / 50); b = Math.min(b, r[i + 1] / 50); c = Math.max(c, r[i] / 50); d = Math.max(d, r[i + 1] / 50); }
+  const bb = [a, b, c, d]; POLY_BB.set(poly, bb); return bb;
+}
+function inCountry(cn, x, y) {
+  for (const poly of cn[2]) {
+    const bb = polyBB(poly); if (x < bb[0] || x > bb[2] || y < bb[1] || y > bb[3]) continue;
+    let inside = false; for (const ring of poly) if (inRing(ring, x, y)) inside = !inside;
+    if (inside) return true;
+  }
+  return false;
+}
+const GB_CACHE = new Map();
+function groupBorders(groups) {
+  const key = JSON.stringify(groups); if (GB_CACHE.has(key)) return GB_CACHE.get(key);
+  const T0 = performance.now();
+  const partsOf = new Map();
+  groups.forEach((grp, gi) => grp.forEach(part => { const cn = BY_ID[part.c]; if (!cn) return; if (!partsOf.has(cn)) partsOf.set(cn, []); partsOf.get(cn).push([gi, part.clip]); }));
+  const who = (x, y) => {
+    for (const cn of EU_COUNTRIES) if (inCountry(cn, x, y)) {
+      for (const [gi, clip] of partsOf.get(cn) || []) if (!clip || inPolyLL(clip, x, y)) return gi;
+      return 'c' + cn[0] + cn[1];
+    }
+    return 'sea';
+  };
+  const border = [], coast = [], eps = .02;
+  const test = (ax, ay, bx, by, keepCoast) => {
+    const dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy); if (L < 1e-6) return;
+    const mx = (ax + bx) / 2, my = (ay + by) / 2, nx = -dy / L * eps, ny = dx / L * eps;
+    const a = who(mx + nx, my + ny), b = who(mx - nx, my - ny);
+    if (a === b) return;
+    if (a === 'sea' || b === 'sea') { if (keepCoast) coast.push(ax, ay, bx, by); } else border.push(ax, ay, bx, by);
+  };
+  for (const cn of EU_COUNTRIES) for (const poly of cn[2]) for (const ring of poly)
+    for (let i = 0; i + 3 < ring.length; i += 2) test(ring[i] / 50, ring[i + 1] / 50, ring[i + 2] / 50, ring[i + 3] / 50, true);
+  for (const grp of groups) for (const part of grp) if (part.clip) {
+    const P = part.clip;
+    for (let i = 0; i < P.length; i++) {
+      const [x0, y0] = P[i], [x1, y1] = P[(i + 1) % P.length], n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / .04));
+      for (let k = 0; k < n; k++) test(x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n, x0 + (x1 - x0) * (k + 1) / n, y0 + (y1 - y0) * (k + 1) / n, false);
+    }
+  }
+  const res = { border, coast }; GB_CACHE.set(key, res);
+  if (typeof window !== 'undefined') window.__gbStats = { ms: performance.now() - T0, border: border.length / 4, coast: coast.length / 4 };
+  return res;
 }

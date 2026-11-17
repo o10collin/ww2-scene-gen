@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import * as H from '../common.js';
 import { hiMap, mercY, regionMaskTexture } from '../map-hi.js';
-import { REICH_1942 } from '../history.js';
+import { REICH_1942, USSR_1943, GROUPS_1943 } from '../history.js';
 
 // Kriegswende an der Ostfront (Stil wie Szene 3): Nach Stalingrad drängt die Rote Armee die Front von der Wolga
 // bis an den Donez zurück (Nov. 1942 -> März 1943). Das von Deutschland besetzte sowjetische Gebiet (rot getönt)
@@ -9,7 +9,7 @@ import { REICH_1942 } from '../history.js';
 const LATS = [60, 58, 56, 54, 52, 50, 48.7, 47, 45.5, 44];
 const FRONT_A = [30.2, 31.6, 32.4, 35.0, 36.8, 39.8, 44.4, 44.2, 44.0, 43.2];   // November 1942 (bis Stalingrad, Kaukasus)
 const FRONT_B = [30.2, 31.4, 32.4, 34.6, 35.6, 36.4, 37.6, 38.6, 38.2, 37.6];   // März 1943 (Rschew, Kursker Bogen, Donez, Mius)
-const SOVIET_LAND = [{ c: '643' }, { c: '804' }, { c: '112' }, { c: '233' }, { c: '428' }, { c: '440' }, { c: '498' }];
+const SOVIET_LAND = USSR_1943;   // Sowjetunion in den Grenzen von 1941
 const BBOX = [21, 43, 50, 61];
 const ARROWS = [[57, 0], [53.2, .25], [49.6, .1], [47.0, .35]];                 // [Breite, Startverzögerung]
 
@@ -41,7 +41,7 @@ export default {
     const map = hiMap({
       bbox: [-20, 25, 90, 78], texW: 3072, detail: { bbox: [4, 38, 58, 64], texW: 6144 },
       center: [p.mapCenterLon, p.mapCenterLat], scale: p.mapScale, land: p.landColor, sea: p.seaColor,
-      borders: rgba(.42), coast: rgba(.3), borderWidth: 1.8,
+      borders: rgba(.42), coast: rgba(.3), borderWidth: 1.8, groups: GROUPS_1943,   // Grenzen Anfang 1943
       regions: [{ name: 'reich', parts: REICH_1942, color: p.germanyColor, alpha: .82, outline: '#ffffff', outlineWidth: 2.4, layer: { bbox: [4.5, 44.8, 25, 56.6] } }]
     });
     map.position.set(p.lookX, 0, p.lookZ);   // Bildmitte auf den Blickpunkt der Kamera
