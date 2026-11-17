@@ -379,27 +379,38 @@ export function figure({ color = P.grey, head = P.skin, helmet = null, scale = 1
       if (!actions[name]) name = g.userData.idleName;
       for (const [nm, a] of Object.entries(actions)) { const on = nm === name; a.enabled = on; a.paused = false; a.setEffectiveWeight(on ? weight : 0); }
       mixer.setTime(time);                                                            // Einmal-Clips bleiben am Ende stehen (clampWhenFinished), beim Zurückspulen wieder frei
-      if (gun) placeGun();
+      if (gun) placeGun(name);
     };
-    // Gewehr in der Hand: jedes Bild aus den Handknochen gesetzt. Beide Hände nah beieinander (Gewehr-Clips) ->
-    // Lauf von der rechten zur linken Hand; sonst einhändig entlang des Unterarms nach vorn-unten getragen.
+    // Gewehr: bei Gewehr-Clips in den Händen (Griff in der rechten Hand, Lauf nach vorn zur linken Hand), sonst
+    // umgehängt auf dem Rücken (Lauf schräg über die rechte Schulter). Jedes Bild aus den Knochen gesetzt.
     let gun = null, placeGun = null;
     if (weapon) {
-      const bR = inst.getObjectByName(M.prefix + 'RightHand'), bL = inst.getObjectByName(M.prefix + 'LeftHand'), bF = inst.getObjectByName(M.prefix + 'RightForeArm');
-      if (bR && bL && bF) {
+      const B = n => inst.getObjectByName(M.prefix + n);
+      const bR = B('RightHand'), bL = B('LeftHand'), bS = B('Spine2') || B('Spine1'), bN = B('Neck'), bH = B('Hips'), bLS = B('LeftShoulder'), bRS = B('RightShoulder');
+      if (bR && bL && bS && bN && bH && bLS && bRS) {
         gun = rifle(weapon === true ? '#2b2620' : weapon); g.add(gun);
-        const pR = new THREE.Vector3(), pL = new THREE.Vector3(), pF = new THREE.Vector3(), d = new THREE.Vector3(), fwd = new THREE.Vector3();
-        placeGun = () => {
+        const pR = new THREE.Vector3(), pL = new THREE.Vector3(), up = new THREE.Vector3(), right = new THREE.Vector3(), fwd = new THREE.Vector3(), v = new THREE.Vector3(), d = new THREE.Vector3();
+        const wp = (b, out) => b.getWorldPosition(out);
+        placeGun = name => {
           g.updateMatrixWorld(true);
-          bR.getWorldPosition(pR); bL.getWorldPosition(pL); bF.getWorldPosition(pF);
           const sc = g.getWorldScale(d).x;
-          gun.scale.setScalar(1);
-          gun.position.copy(g.worldToLocal(pR.clone()));
-          if (pR.distanceTo(pL) < .62 * sc) gun.lookAt(pL.clone().sub(pR).multiplyScalar(4).add(pR));
-          else {
-            fwd.set(1, 0, 0).transformDirection(g.matrixWorld);                         // Blickrichtung der Figur
-            d.copy(pR).sub(pF).normalize().add(fwd.multiplyScalar(1.4)).normalize();
-            gun.lookAt(pR.clone().add(d));
+          // Rumpf-Achsen aus den Knochen
+          up.copy(wp(bN, v)).sub(wp(bH, d)).normalize();
+          right.copy(wp(bRS, v)).sub(wp(bLS, d)).normalize();
+          fwd.crossVectors(up, right).normalize();
+          if (fwd.dot(v.set(1, 0, 0).transformDirection(g.matrixWorld)) < 0) fwd.negate();
+          if (/Rifle/.test(name)) {
+            wp(bR, pR); wp(bL, pL);
+            // Lauf nach vorn, leicht Richtung linker Hand (nicht quer zur Seite)
+            d.copy(pL).sub(pR).normalize().multiplyScalar(.28).add(fwd).normalize();
+            gun.position.copy(g.worldToLocal(pR.clone()));
+            gun.up.set(0, 1, 0); gun.lookAt(pR.clone().addScaledVector(d, 4));   // lookAt erwartet Weltkoordinaten
+          } else {
+            wp(bS, v).addScaledVector(fwd, -.17 * sc).addScaledVector(up, -.12 * sc);
+            d.copy(up).multiplyScalar(.8).addScaledVector(right, .55).addScaledVector(fwd, -.08).normalize();
+            const grip = v.clone().addScaledVector(d, -.12 * sc);
+            gun.position.copy(g.worldToLocal(grip.clone()));
+            gun.up.copy(fwd); gun.lookAt(grip.clone().addScaledVector(d, 4));
           }
         };
         g.userData.muzzle = (target = new THREE.Vector3()) => gun.userData.tip.getWorldPosition(target);
