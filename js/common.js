@@ -401,8 +401,9 @@ export function figure({ color = P.grey, head = P.skin, helmet = null, scale = 1
           if (fwd.dot(v.set(1, 0, 0).transformDirection(g.matrixWorld)) < 0) fwd.negate();
           if (/Rifle/.test(name)) {
             wp(bR, pR); wp(bL, pL);
-            // Lauf nach vorn, leicht Richtung linker Hand (nicht quer zur Seite)
-            d.copy(pL).sub(pR).normalize().multiplyScalar(.28).add(fwd).normalize();
+            // Lauf nach vorn, leicht Richtung linker Hand (nicht quer zur Seite); mit Zielpunkt (userData.aim) genau darauf
+            if (g.userData.aim) d.copy(g.userData.aim).sub(pR).normalize();
+            else d.copy(pL).sub(pR).normalize().multiplyScalar(.28).add(fwd).normalize();
             gun.position.copy(g.worldToLocal(pR.clone()));
             gun.up.set(0, 1, 0); gun.lookAt(pR.clone().addScaledVector(d, 4));   // lookAt erwartet Weltkoordinaten
           } else {
