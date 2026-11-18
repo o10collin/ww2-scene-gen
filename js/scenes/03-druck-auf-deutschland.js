@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import * as H from '../common.js';
 import { hiMap } from '../map-hi.js';
-import { REICH_1942 } from '../history.js';
+import { REICH_1942, GROUPS_1943 } from '../history.js';
 
 // Europa Ende 1942: das Großdeutsche Reich in seinen damaligen Grenzen (mit Österreich, Böhmen und Mähren,
 // den annektierten Teilen Polens, Ostpreußen mit Memelland, Elsass-Lothringen, Luxemburg, Nord-Slowenien),
@@ -26,14 +26,14 @@ const BRITAIN = [{ c: '826' }];
 
 // Druck von drei Seiten, als große flache Kartenpfeile bis an die Reichsgrenze: [Farbe, Start (s), Wegpunkte lon/lat]
 const ARROWS = [
-  ['west', 1.0, [[0.6, 52.6], [3.4, 52.7], [5.7, 51.7]]],                 // Westen: Großbritannien (Bomberoffensive)
-  ['west', 1.9, [[11.9, 42.6], [12.0, 44.6], [12.3, 46.5]]],               // Süden: Italien -> Alpen
-  ['soviet', 2.7, [[28.6, 54.5], [26.0, 54.1], [23.5, 53.6]]],             // Osten (Nord): Richtung Moskau
-  ['soviet', 3.3, [[28.6, 49.0], [26.0, 49.7], [23.8, 50.7]]]              // Osten (Süd): Ukraine/Don
+  ['west', 1.0, [[-6.5, 52.4], [-1.0, 53.4], [3.4, 52.9], [5.7, 51.7]]],                 // Westen: Großbritannien (Bomberoffensive)
+  ['west', 1.9, [[10.8, 38.5], [11.6, 42.6], [12.0, 44.8], [12.3, 46.5]]],               // Süden: Italien -> Alpen
+  ['soviet', 2.7, [[36.0, 55.4], [31.0, 54.8], [26.5, 54.1], [23.5, 53.6]]],             // Osten (Nord): Richtung Moskau
+  ['soviet', 3.3, [[36.0, 48.0], [31.0, 48.6], [26.8, 49.6], [23.8, 50.7]]]              // Osten (Süd): Ukraine/Don
 ];
 
 export default {
-  id: 'druck-auf-deutschland', title: 'Deutschland unter Druck', seed: 13, duration: 7,
+  id: 'druck-auf-deutschland', title: 'Deutschland unter Druck', seed: 13, duration: 7, rev: 2,
   script: 'Die Alliierten werden stärker und Deutschland gerät mehr und mehr unter Druck.',
   caption: { title: 'Europa', sub: '1942' },
   params: {
@@ -53,7 +53,7 @@ export default {
     labelFont: { type: 'select', options: ['Cormorant Garamond (Serif)', 'wie Bauchbinde'], value: 'wie Bauchbinde', label: 'Schrift Beschriftung' },
     labels: { type: 'boolean', value: true, label: 'Beschriftung' },
     labelSize: { type: 'number', min: .3, max: 4, step: .05, value: 2.1, label: 'Beschriftung Größe' },
-    ...H.cameraParams([0, 26, 20], [0, 21, 14], [0.5, 0, -2], 38)
+    ...H.cameraParams([0, 21, 14], [0, 20.4, 13.6], [0.5, 0, -2], 38)   // von Anfang an nah (wie das Ende des früheren Zooms)
   },
   build({ scene, params: p, rng: r }) {
     H.sky(scene, '#06080c', 28, 52);   // Kartenrand verschwindet im Dunst (Hintergrund wie Szene 2)
@@ -66,7 +66,7 @@ export default {
     const border = new THREE.Color(p.borderColor), rgba = a => `rgba(${border.r * 255 | 0},${border.g * 255 | 0},${border.b * 255 | 0},${a})`;
     const map = hiMap({
       bbox: [-30, 22, 82, 78], texW: 3072, detail: { bbox: [-9, 37, 39, 62], texW: 6144 }, center: [p.mapCenterLon, p.mapCenterLat], scale: p.mapScale, land: p.landColor, sea: p.seaColor,
-      borders: rgba(.42), coast: rgba(.3), borderWidth: 1.8,
+      borders: rgba(.62), coast: rgba(.45), borderWidth: 3.6, groups: GROUPS_1943,   // damalige Grenzen, kräftigere Linien
       font: p.labelFont.startsWith('Cormorant') ? "'Cormorant Garamond', Georgia, serif" : null,
       regions: [
         ...tint,
@@ -91,10 +91,10 @@ export default {
       return pin;
     };
     const berlin = city([13.4, 52.5], 'Berlin', H.ROLE.axis, 0, -.7);
-    city([-0.1, 51.5], 'London', H.ROLE.west, -1.3, -.15);
+    city([-0.1, 51.5], 'London', H.ROLE.west, 1.25, .05);
     if (p.labels) {
       U.country(13.0, 49.9, 'Deutsches Reich', .5 * s, { box });
-      U.country(-3.5, 55.4, 'Großbritannien', .42 * s, { box }); U.country(27.5, 56.4, 'Sowjetunion', .48 * s, { box });
+      U.country(1.6, 55.6, 'Großbritannien', .42 * s, { box }); U.country(27.5, 56.4, 'Sowjetunion', .48 * s, { box });
       U.country(10.6, 44.0, 'Italien', .36 * s, { box, opacity: .7 });
     }
     return {

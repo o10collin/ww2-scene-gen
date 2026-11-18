@@ -157,8 +157,12 @@ let rebuildTimer = null;
 function paramsFor(def) {
   const p = {};
   for (const [k, s] of Object.entries(sceneSchema(def))) p[k] = s.value;
-  const schema = sceneSchema(def), saved = load('scene.' + def.id);
+  const schema = sceneSchema(def);
+  let saved = load('scene.' + def.id);
+  // Szenenversion: wird eine Szene überarbeitet (def.rev erhöht), gelten die neuen Standardwerte statt alter Speicherstände
+  if ((saved.__rev || 0) !== (def.rev || 0)) { saved = {}; try { localStorage.removeItem(LS + 'scene.' + def.id); } catch { /* kein Speicher */ } }
   for (const [k, v] of Object.entries(saved)) {
+    if (k === '__rev') continue;
     const sc = schema[k];
     if (sc && sc.type === 'number' && !Number.isFinite(toNum(v))) continue;   // ungültige Zahl (z. B. null) -> Standard behalten
     p[k] = sc && sc.type === 'number' ? toNum(v) : v;
@@ -584,7 +588,7 @@ function buildSceneGui() {
     }
     for (const [k, s] of groups[g]) {
       const row = f.add(active.params, k, s, key => {
-        save('scene.' + active.def.id, active.params);
+        save('scene.' + active.def.id, { ...active.params, __rev: active.def.rev || 0 });
         if (!s.live) scheduleRebuild();
       });
       if (g === 'Kamera') cameraRows.push(row);
@@ -599,7 +603,7 @@ function takeCamera(which) {
   const p = active.params, c = active.camera;
   p['cam' + which + 'X'] = +c.position.x.toFixed(2); p['cam' + which + 'Y'] = +c.position.y.toFixed(2); p['cam' + which + 'Z'] = +c.position.z.toFixed(2);
   p.lookX = +controls.target.x.toFixed(2); p.lookY = +controls.target.y.toFixed(2); p.lookZ = +controls.target.z.toFixed(2);
-  save('scene.' + active.def.id, p);
+  save('scene.' + active.def.id, { ...p, __rev: active.def.rev || 0 });
   cameraRows.forEach(r => r.sync && r.sync());
 }
 
