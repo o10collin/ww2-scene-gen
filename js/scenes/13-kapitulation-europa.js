@@ -3,7 +3,7 @@ import * as H from '../common.js';
 const { P } = H;
 
 export default {
-  id: 'kapitulation-europa', title: 'Kapitulation Deutschlands', seed: 23, duration: 8, rev: 3,
+  id: 'kapitulation-europa', title: 'Kapitulation Deutschlands', seed: 23, duration: 8, rev: 4,
   script: 'Am 8. Mai kapituliert Deutschland und setzt dem Zweiten Weltkrieg in Europa ein Ende.',
   caption: { title: 'Kriegsende in Europa', sub: '8. Mai 1945' },
   params: {
@@ -91,7 +91,11 @@ export default {
     // ---------- Personen: Offiziere hinter den Delegationen, zwei deutsche Begleiter hinter dem Unterzeichner ----------
     const standers = [[-3.3, -3.2, H.ROLE.west, 'Standing_Idle_Loop'], [1.9, -4.1, H.ROLE.soviet, 'Thinking_While_Standing'], [-1.95, -3.4, H.ROLE.west, 'Standing_Idle']];
     standers.forEach(([x, z, glow, pose], k) => { const f = H.figure({ color: P.grey, glow, model: k % 2 ? 'soldier' : 'suit', pose, loopPose: true, seed: 140 + k * 3 }); f.position.set(x, 0, z); f.rotation.y = -Math.PI / 2 + (k - 1) * .15; scene.add(f); });
-    for (const [x, z, k] of [[1.0, 1.5, 0], [2.35, 2.6, 1]]) { const f = H.figure({ color: '#555a63', glow: H.ROLE.axis, model: 'soldier', pose: 'Standing_Idle_Loop', loopPose: true, seed: 160 + k * 5 }); f.position.set(x, 0, z); f.rotation.y = Math.PI / 2 + .3; scene.add(f); }   // rechts hinter dem Unterzeichner, verdecken ihn nicht
+    // die beiden deutschen Begleiter sitzen links und rechts neben dem Unterzeichner am Tisch (Knie unter der Tischkante)
+    for (const [x, k] of [[-1.2, 0], [1.2, 1]]) {
+      const f = H.figure({ color: '#555a63', glow: H.ROLE.axis, model: 'soldier', pose: 'Male_Talking_While_Seated', seed: 160 + k * 5 }); f.position.set(x, 0, 1.2); f.rotation.y = Math.PI / 2; scene.add(f);
+      const ch = H.chair(); ch.rotation.y = Math.PI; ch.position.set(x, 0, 1.35); scene.add(ch);
+    }
     // ---------- Pressefotografen mit Kameras auf Stativen; die Blitze lösen während der Unterzeichnung aus ----------
     const flashes = [];
     for (const [x, z, ry, k] of [[3.5, .9, -2.85, 0], [-3.9, -1.9, -.1, 1]]) {
