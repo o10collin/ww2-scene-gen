@@ -14,7 +14,7 @@ const LATS = [60, 58, 56, 54, 53, 52.1, 51.4, 50.6, 49.2, 47.6, 46.5, 45.3, 44];
 const FRONT_A = [30.3, 31.6, 33.6, 35.0, 36.3, 37.6, 39.0, 39.6, 42.0, 44.4, 44.2, 44.4, 43.8];
 const FRONT_B = [30.3, 31.4, 31.9, 34.2, 36.0, 34.6, 34.9, 36.4, 37.3, 38.9, 38.6, 37.6, 37.8];
 const SOVIET_LAND = USSR_1943;   // Sowjetunion in den Grenzen von 1941
-const BBOX = [21, 40, 50, 61];
+const BBOX = [21, 40, 50, 60.02];   // oben genau an der Front bei Leningrad
 const ARROWS = [[57, 0], [53.6, .25], [50.9, .1], [47.6, .35]];                 // [Breite, Startverzögerung]
 
 export default {

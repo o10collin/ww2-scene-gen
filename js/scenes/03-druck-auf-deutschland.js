@@ -94,7 +94,7 @@ export default {
     city([-0.1, 51.5], 'London', H.ROLE.west, 1.25, .05);
     if (p.labels) {
       U.country(13.0, 49.9, 'Deutsches Reich', .5 * s, { box });
-      U.country(1.6, 55.6, 'Großbritannien', .42 * s, { box }); U.country(27.5, 56.4, 'Sowjetunion', .48 * s, { box });
+      U.country(2.6, 54.5, 'Großbritannien', .42 * s, { box }); U.country(27.5, 56.4, 'Sowjetunion', .48 * s, { box });
       U.country(10.6, 44.0, 'Italien', .36 * s, { box, opacity: .7 });
     }
     return {
