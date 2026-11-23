@@ -6,21 +6,25 @@ import { REICH_1942, USSR_1943, GROUPS_1943 } from '../history.js';
 // Kriegswende an der Ostfront (Stil wie Szene 3): Nach Stalingrad drängt die Rote Armee die Front von der Wolga
 // bis an den Donez zurück (Nov. 1942 -> März 1943). Das von Deutschland besetzte sowjetische Gebiet (rot getönt)
 // schrumpft mit der Front, gelbe Kartenpfeile schieben sie nach Westen. Frontverläufe vereinfacht.
-const LATS = [60, 58, 56, 54, 52, 50, 48.7, 47, 45.5, 44];
-const FRONT_A = [30.2, 31.6, 32.4, 35.0, 36.8, 39.8, 44.4, 44.2, 44.0, 43.2];   // November 1942 (bis Stalingrad, Kaukasus)
-const FRONT_B = [30.2, 31.4, 32.4, 34.6, 35.6, 36.4, 37.6, 38.6, 38.2, 37.6];   // März 1943 (Rschew, Kursker Bogen, Donez, Mius)
+// Frontverläufe (Längengrad je Breitengrad), vereinfacht nach den Lagekarten:
+// November 1942: Leningrad, Rschewer Bogen, Orjol, Woronesch, Don-Bogen bis Stalingrad, Kalmückensteppe, Kaukasus
+// März 1943: Leningrad, Staraja Russa, nach Räumung des Rschewer Bogens, Orjol, Kursker Bogen (Sewsk, Rylsk,
+// Belgorod), Donez bei Isjum, Mius, Taganrog, Kuban-Brückenkopf
+const LATS = [60, 58, 56, 54, 53, 52.1, 51.4, 50.6, 49.2, 47.6, 46.5, 45.3, 44];
+const FRONT_A = [30.3, 31.6, 33.6, 35.0, 36.3, 37.6, 39.0, 39.6, 42.0, 44.4, 44.2, 44.4, 43.8];
+const FRONT_B = [30.3, 31.4, 31.9, 34.2, 36.0, 34.6, 34.9, 36.4, 37.3, 38.9, 38.6, 37.6, 37.8];
 const SOVIET_LAND = USSR_1943;   // Sowjetunion in den Grenzen von 1941
-const BBOX = [21, 43, 50, 61];
-const ARROWS = [[57, 0], [53.2, .25], [49.6, .1], [47.0, .35]];                 // [Breite, Startverzögerung]
+const BBOX = [21, 40, 50, 61];
+const ARROWS = [[57, 0], [53.6, .25], [50.9, .1], [47.6, .35]];                 // [Breite, Startverzögerung]
 
 export default {
-  id: 'kriegswende', title: 'Kriegswende', seed: 15, duration: 8,
+  id: 'kriegswende', title: 'Kriegswende', seed: 15, duration: 8, rev: 2,
   script: 'Die Rote Armee drängt die deutschen Truppen zurück. Dies wird oft als Kriegswende bezeichnet.',
   caption: { title: 'Ostfront', sub: 'Februar 1943' },
   params: {
-    mapScale: { type: 'number', min: .3, max: 2.5, step: .01, value: .95, label: 'Kartenmaßstab (Zoom)' },
-    mapCenterLon: { type: 'number', min: 10, max: 50, step: .1, value: 32, label: 'Bildmitte Länge (°)' },
-    mapCenterLat: { type: 'number', min: 40, max: 62, step: .1, value: 51.5, label: 'Bildmitte Breite (°)' },
+    mapScale: { type: 'number', min: .3, max: 2.5, step: .01, value: .74, label: 'Kartenmaßstab (Zoom)' },
+    mapCenterLon: { type: 'number', min: 10, max: 50, step: .1, value: 32.5, label: 'Bildmitte Länge (°)' },
+    mapCenterLat: { type: 'number', min: 40, max: 62, step: .1, value: 51.2, label: 'Bildmitte Breite (°)' },
     tStart: { type: 'number', min: 0, max: 8, step: .1, value: 1.2, label: 'Gegenoffensive ab (s)' },
     tEnd: { type: 'number', min: 0, max: 8, step: .1, value: 6.6, label: 'Front erreicht Donez (s)' },
     arrowSize: { type: 'number', min: .3, max: 3, step: .05, value: 1, label: 'Pfeilstärke' },
@@ -32,7 +36,7 @@ export default {
     frontColor: { type: 'color', value: '#ffe2a8', label: 'Frontlinie' },
     labels: { type: 'boolean', value: true, label: 'Beschriftung' },
     labelSize: { type: 'number', min: .3, max: 4, step: .05, value: 2.1, label: 'Beschriftung Größe' },
-    ...H.cameraParams([8, 28, 20], [2, 22, 14], [4, 0, -4], 38)
+    ...H.cameraParams([0, 21, 14], [0, 20.4, 13.6], [0.5, 0, -2], 38)   // wie Szene 3: von Anfang an nah
   },
   build({ scene, params: p, rng: r }) {
     H.sky(scene, '#06080c', 30, 56);
@@ -41,7 +45,7 @@ export default {
     const map = hiMap({
       bbox: [-20, 25, 90, 78], texW: 3072, detail: { bbox: [4, 38, 58, 64], texW: 6144 },
       center: [p.mapCenterLon, p.mapCenterLat], scale: p.mapScale, land: p.landColor, sea: p.seaColor,
-      borders: rgba(.42), coast: rgba(.3), borderWidth: 1.8, groups: GROUPS_1943,   // Grenzen Anfang 1943
+      borders: rgba(.62), coast: rgba(.45), borderWidth: 3.6, groups: GROUPS_1943,   // Grenzen Anfang 1943
       regions: [{ name: 'reich', parts: REICH_1942, color: p.germanyColor, alpha: .82, outline: '#ffffff', outlineWidth: 2.4, layer: { bbox: [4.5, 44.8, 25, 56.6] } }]
     });
     map.position.set(p.lookX, 0, p.lookZ);   // Bildmitte auf den Blickpunkt der Kamera
@@ -57,14 +61,14 @@ export default {
         lats: { value: LATS }, fa: { value: FRONT_A }, fb: { value: FRONT_B }, bb: { value: new THREE.Vector4(BBOX[0], mercY(BBOX[1]), BBOX[2], mercY(BBOX[3])) } },
       vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
       fragmentShader: `
-        uniform sampler2D mask; uniform vec3 col; uniform float u; uniform float lats[10]; uniform float fa[10]; uniform float fb[10]; uniform vec4 bb;
+        uniform sampler2D mask; uniform vec3 col; uniform float u; uniform float lats[13]; uniform float fa[13]; uniform float fb[13]; uniform vec4 bb;
         varying vec2 vUv;
         float frontLon(float lat) {
           float f = mix(fa[0], fb[0], u);
-          for (int i = 0; i < 9; i++) {
+          for (int i = 0; i < 12; i++) {
             if (lat <= lats[i] && lat >= lats[i + 1]) { float k = (lats[i] - lat) / (lats[i] - lats[i + 1]); f = mix(mix(fa[i], fb[i], u), mix(fa[i + 1], fb[i + 1], u), k); }
           }
-          if (lat < lats[9]) f = mix(fa[9], fb[9], u);
+          if (lat < lats[12]) f = mix(fa[12], fb[12], u);
           return f;
         }
         void main() {
@@ -84,13 +88,13 @@ export default {
     const frontMat = H.glowMat(p.frontColor, 1.6);
     let front = null;
     const frontAt = (lat, u) => {
-      for (let i = 0; i < 9; i++) if (lat <= LATS[i] && lat >= LATS[i + 1]) { const k = (LATS[i] - lat) / (LATS[i] - LATS[i + 1]); return H.lerp(H.lerp(FRONT_A[i], FRONT_B[i], u), H.lerp(FRONT_A[i + 1], FRONT_B[i + 1], u), k); }
-      return H.lerp(FRONT_A[9], FRONT_B[9], u);
+      for (let i = 0; i < 12; i++) if (lat <= LATS[i] && lat >= LATS[i + 1]) { const k = (LATS[i] - lat) / (LATS[i] - LATS[i + 1]); return H.lerp(H.lerp(FRONT_A[i], FRONT_B[i], u), H.lerp(FRONT_A[i + 1], FRONT_B[i + 1], u), k); }
+      return H.lerp(FRONT_A[12], FRONT_B[12], u);
     };
 
     // Kartenpfeile der Roten Armee: wachsen mit der Front, die Spitze sitzt immer an der Frontlinie
     const arrows = ARROWS.map(([lat, delay]) => {
-      const lonA = frontAt(lat, 0) + 4.5, lonB = frontAt(lat, 1) + .3;
+      const lonA = 60, lonB = frontAt(lat, 1) + .3;   // Start außerhalb des Bildes (rechts)
       const pts = [[lonA, lat], [(lonA + lonB) / 2, lat + .5], [lonB, lat]];
       return { a: U.flatArrow(pts, H.ROLE.soviet, { width: .42 * p.arrowSize, head: 1.0 * p.arrowSize, headW: 1.05 * p.arrowSize }), lat, lonA, lonB, delay };
     });
@@ -101,10 +105,10 @@ export default {
       if (p.labels) { const l = U.country(ll[0], ll[1], name, .36 * s, { box: true }); const v = U.project(ll[0], ll[1], .6); l.position.set(v.x + dx, .6, v.z + dz); }
     };
     city([13.4, 52.5], 'Berlin', H.ROLE.axis); city([37.6, 55.75], 'Moskau', H.ROLE.soviet);
-    city([44.5, 48.7], 'Stalingrad', H.ROLE.soviet, 1.9, .1); city([36.2, 50.0], 'Charkow', '#ffffff', 1.6, .1);
+    city([44.5, 48.7], 'Stalingrad', H.ROLE.soviet, 1.9, .1); city([36.2, 50.0], 'Charkow', '#ffffff', -1.7, .35);
     if (p.labels) {
-      U.country(16.5, 50.3, 'Deutsches Reich', .5 * s, { box: true });
-      U.country(44.5, 57.0, 'Sowjetunion', .5 * s, { box: true });
+      U.country(18.6, 50.9, 'Deutsches Reich', .5 * s, { box: true });
+      U.country(43.0, 55.2, 'Sowjetunion', .5 * s, { box: true });
     }
     return {
       update(t, p) {
