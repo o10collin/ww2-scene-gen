@@ -25,7 +25,7 @@ function terrainY(x, z) {
 }
 
 export default {
-  id: 'd-day', title: 'D-Day in der Normandie', seed: 20, duration: 9, rev: 2,
+  id: 'd-day', title: 'D-Day in der Normandie', seed: 20, duration: 9, rev: 3,
   script: 'Im Juni 1944 landen die Westalliierten in der Normandie.',
   caption: { title: 'Landung in der Normandie', sub: '6. Juni 1944' },
   params: {
@@ -33,7 +33,7 @@ export default {
     soldiersPer: { type: 'number', min: 2, max: 12, step: 1, value: 8, label: 'Soldaten je Boot' },
     ships: { type: 'number', min: 0, max: 6, step: 1, value: 4, label: 'Kriegsschiffe vor der Küste' },
     obstacles: { type: 'number', min: 0, max: 60, step: 1, value: 34, label: 'Strandhindernisse' },
-    arrive: { type: 'number', min: 1, max: 8, step: .1, value: 3.4, label: 'Ankunft nach (s)' },
+    arrive: { type: 'number', min: 1, max: 8, step: .1, value: 2.6, label: 'Ankunft nach (s)' },
     explosions: { type: 'number', min: 0, max: 12, step: 1, value: 6, label: 'Einschläge' },
     planes: { type: 'number', min: 0, max: 8, step: 1, value: 4, label: 'Flugzeuge' },
     skyColor: { type: 'color', value: '#1a2331', label: 'Himmel (Morgengrauen)' },
@@ -42,7 +42,8 @@ export default {
     grassColor: { type: 'color', value: '#56604c', label: 'Hang' },
     uniformColor: { type: 'color', value: '#6f7a5a', label: 'Uniform' },
     glow: { type: 'boolean', value: true, label: 'Soldaten leuchten blau' },
-    ...H.cameraParams([-40, 8, 9], [-21, 6.2, 5], [14, 1.4, 0], 40)
+        // schräg von hinten über dem Wasser: Boote laufen auf, Rampen fallen, die Soldaten verteilen sich am Strand
+    ...H.cameraParams([-36, 9.5, 26], [-25, 7.8, 19], [9, 1.0, -5], 40)
   },
   build({ scene, params: p, rng: r, shadows }) {
     H.sky(scene, p.skyColor, 50, 170);
@@ -79,16 +80,16 @@ export default {
       const g = new THREE.Group(), hullM = new THREE.MeshLambertMaterial({ color: '#5d6a55', flatShading: true, side: THREE.DoubleSide }), dark = new THREE.MeshLambertMaterial({ color: '#2f3430', flatShading: true });
       const add = (geo, x, y, z, m = hullM) => { const b = new THREE.Mesh(geo, m); b.position.set(x, y, z); b.castShadow = true; g.add(b); return b; };
       // Rumpf: Querschnitt mit ausgestellten Bordwänden und offenem Truppenraum, entlang der Länge extrudiert
-      const sec = new THREE.Shape([[-1.15, 0], [1.15, 0], [1.6, 1.6], [-1.6, 1.6]].map(([z, y]) => new THREE.Vector2(z, y)));
-      sec.holes.push(new THREE.Path([[-1.0, .3], [-1.44, 1.58], [1.44, 1.58], [1.0, .3]].map(([z, y]) => new THREE.Vector2(z, y))));
+      const sec = new THREE.Shape([[-1.15, 0], [1.15, 0], [1.6, 2.0], [-1.6, 2.0]].map(([z, y]) => new THREE.Vector2(z, y)));
+      sec.holes.push(new THREE.Path([[-1.0, .3], [-1.46, 1.98], [1.46, 1.98], [1.0, .3]].map(([z, y]) => new THREE.Vector2(z, y))));
       const hullGeo = new THREE.ExtrudeGeometry(sec, { depth: 9.4, bevelEnabled: false }); hullGeo.translate(0, 0, -4.9); hullGeo.rotateY(Math.PI / 2);
       add(hullGeo, 0, 0, 0);
       add(new THREE.BoxGeometry(9.2, .1, 2.0), 0, .32, 0, dark);                               // Boden des Truppenraums
-      const stern = add(new THREE.CylinderGeometry(1.6, 1.15, 1.6, 8, 1, false, 0, Math.PI), -4.9, .8, 0); stern.rotation.y = Math.PI;   // gerundetes Heck
-      add(new THREE.BoxGeometry(1.5, .55, 2.6), -4.0, 1.85, 0);                                 // Steuerstand
-      for (const z of [-1, 1]) { const mg = add(new THREE.BoxGeometry(.7, .09, .09), -3.4, 2.25, z * 1.1, dark); mg.rotation.z = .3; }   // MG
+      const stern = add(new THREE.CylinderGeometry(1.6, 1.15, 2.0, 8, 1, false, 0, Math.PI), -4.9, 1.0, 0); stern.rotation.y = Math.PI;   // gerundetes Heck
+      add(new THREE.BoxGeometry(1.5, .55, 2.6), -4.0, 2.25, 0);                                 // Steuerstand
+      for (const z of [-1, 1]) { const mg = add(new THREE.BoxGeometry(.7, .09, .09), -3.4, 2.65, z * 1.1, dark); mg.rotation.z = .3; }   // MG
       const ramp = new THREE.Group(); ramp.position.set(4.55, .1, 0); g.add(ramp);
-      const rp = new THREE.Mesh(new THREE.BoxGeometry(.16, 1.65, 2.6), hullM); rp.position.set(0, .82, 0); rp.castShadow = true; ramp.add(rp);
+      const rp = new THREE.Mesh(new THREE.BoxGeometry(.16, 2.0, 2.6), hullM); rp.position.set(0, 1.0, 0); rp.castShadow = true; ramp.add(rp);
       g.userData.ramp = ramp;
       return g;
     };
@@ -97,24 +98,38 @@ export default {
     for (let i = 0; i < nC; i++) {
       const z = (i - (nC - 1) / 2) * 9 + (r() - .5) * 1.5;
       const craft = lcvp(); scene.add(craft);
-      const wave = i % 2, stopX = shoreX(z) - 2.6, delay = wave * 1.3 + r() * .4;   // zwei Wellen
+      const wave = i % 2, stopX = shoreX(z) - 7.2, delay = wave * 1.3 + r() * .4;   // zwei Wellen
       const cr = { craft, z, stopX, delay, ph: r() * 6, tArrive: delay + p.arrive };
       crafts.push(cr);
-      for (let k = 0; k < p.soldiersPer; k++) {
-        const col2 = k % 2, row = Math.floor(k / 2);
-        const sz = z + (col2 ? .55 : -.55);                                                   // zwei Bahnen je Boot
-        laneZ.push(sz);
-        const clip = k % 3 === 2 ? 'Jogging' : 'Rifle_Run_Forward';
-        const f = H.figure({ color: p.uniformColor, helmet: '#4d5a3e', glow: p.glow ? H.ROLE.west : null, strength: 1.35, clips: { idle: 'Crouch_Idle', walk: clip, run: clip }, seed: 80 + i * 13 + k, weapon: true });
-        scene.add(f);
-        soldiers.push({ f, cr, inX: 3.4 - row * 1.15, sz, tExit: cr.tArrive + .7 + row * .45 + col2 * .15, v: 3.0 + (k % 3) * .25, stopS: 25.2 + (k % 3) * .4 });
+      // Soldaten: knien im Truppenraum (Helme unter der Bordwand), gehen über die Rampe, waten kurz und laufen dann
+      // jeder anders (Gewehr-Lauf, Sprint, geduckt) zu einem eigenen Ziel: Deckung hinter einem Hindernis oder an der
+      // Kiesbank; einer je Boot wird getroffen. Je Bahn sind die Hinteren nie schneller und halten früher an,
+      // damit niemand durch einen anderen läuft.
+      const RUN = [['Rifle_Run_Forward', 3.5], ['Run_Natural', 2.4], ['Rifle_Run_Forward', 3.3], ['Rifle_Walking_Crouched', 1.4]];
+      const STOP = ['Rifle_Aiming_And_Kneeling', 'Crouch_Idle', 'Kneeling_Idle'];
+      const lanes = [[], []];
+      for (let k = 0; k < p.soldiersPer; k++) lanes[k % 2].push(k);
+      const victimK = 2 + Math.floor(r() * Math.max(1, p.soldiersPer - 2));
+      for (const lane of lanes) {
+        let vMax = 9, sMax = 27;
+        lane.forEach((k, li) => {
+          const row = Math.floor(k / 2), col2 = k % 2, sz = z + (col2 ? .62 : -.62);
+          laneZ.push(sz);
+          let [clip, vr] = RUN[(k * 7 + i * 3) % RUN.length];
+          vr = Math.min(vMax, vr * (.92 + r() * .16)); vMax = vr;
+          const stopS = Math.min(sMax, li === 0 ? 24.5 + r() * 2 : sMax - 1.6 - r() * 4); sMax = stopS;
+          const f = H.figure({ color: p.uniformColor, helmet: '#4d5a3e', glow: p.glow ? H.ROLE.west : null, strength: 1.35, clips: { idle: 'Kneeling_Idle', walk: 'Rifle_Walk_Forward', run: clip }, seed: 80 + i * 13 + k, weapon: true });
+          scene.add(f);
+          soldiers.push({ f, cr, inX: 3.6 - row * 1.2, sz, tz: sz + (r() - .5) * .5, tExit: cr.tArrive + .55 + row * .7 + col2 * .2, vw: 1.6, vr, stopS,
+            stopPose: STOP[(k + i) % STOP.length], ph: r() * 4, die: k === victimK ? 4 + r() * 6 : null });
+        });
       }
     }
     // Strandhindernisse auf dem Watt, nicht auf den Laufbahnen
     const hedgehog = () => { const g = new THREE.Group(); for (const [rx, rz] of [[0, .9], [0, -.9], [Math.PI / 2, .9]]) { const b = H.box(.14, 2.1, .14, '#2c2e31'); b.rotation.set(rx, 0, rz); g.add(b); } return g; };
     let placed = 0, tries = 0;
     while (placed < p.obstacles && tries++ < 800) {
-      const z = -46 + r() * 92; if (laneZ.some(lz => Math.abs(lz - z) < 1.1) || crafts.some(cr => Math.abs(cr.z - z) < 2.2)) continue;
+      const z = -46 + r() * 92; if (laneZ.some(lz => Math.abs(lz - z) < 1.3) || crafts.some(cr => Math.abs(cr.z - z) < 2.2)) continue;
       const x = shoreX(z) + 3 + r() * 15;
       const o = r() < .7 ? hedgehog() : H.cyl(.09, .11, 2.4, '#4a3d30', 5);
       o.position.set(x, terrainY(x, z) + (o.isMesh ? .9 : .65), z); o.rotation.y = r() * 3; if (o.isMesh) o.rotation.z = -.35; scene.add(o); placed++;
@@ -154,22 +169,35 @@ export default {
         water.userData.at(t);
         for (const cr of crafts) {
           const u = H.span(t, cr.delay - .8, cr.tArrive), uu = 1 - (1 - u) * (1 - u);
-          const x = H.lerp(cr.stopX - 38, cr.stopX, uu), bob = (1 - u * .8);
+          const x = H.lerp(cr.stopX - 38, cr.stopX, uu), bob = 1 - u;   // aufgelaufen: liegt still
           cr.craft.position.set(x, .05 + Math.sin(t * 2.1 + cr.ph) * .12 * bob, cr.z);
           cr.craft.rotation.z = Math.sin(t * 1.6 + cr.ph) * .03 * bob + (1 - u) * .03; cr.craft.rotation.x = Math.sin(t * 1.3 + cr.ph) * .02 * bob;
           cr.craft.userData.ramp.rotation.z = -1.45 * H.easeOut(H.span(t, cr.tArrive, cr.tArrive + .6));   // Rampe klappt nach vorn ab
           cr.x = x;
         }
         for (const s of soldiers) {
-          const cx = s.cr.x;
-          if (t < s.tExit) {                                                                  // geduckt im Boot
-            s.f.position.set(cx + s.inX, s.cr.craft.position.y + .35, s.sz); s.f.rotation.y = 0;
-            s.f.userData.idle(t);
-          } else {                                                                            // über die Rampe an Land, Lauf bis zur Kiesbank
-            const x0 = cx + s.inX, d = Math.min((t - s.tExit) * s.v, shoreX(s.sz) + s.stopS - x0), x = x0 + d;
-            s.f.position.set(x, Math.max(terrainY(x, s.sz), s.cr.craft.position.y + .35 - d * .25), s.sz); s.f.rotation.y = 0;
-            if (x >= shoreX(s.sz) + s.stopS - .05) s.f.userData.pose('Crouch_Idle', t); else s.f.userData.walkDist(d, 1.3);
+          const c = s.cr.craft, cx = s.cr.x, floorY = c.position.y + .37;
+          if (t < s.tExit) {                                                                  // kniet im Boot
+            s.f.position.set(cx + s.inX, floorY, s.sz); s.f.rotation.y = 0; s.f.userData.pose('Kneeling_Idle', t + s.ph);
+            continue;
           }
+          // Wege: A = im Boot bis zur Rampe und die Rampe hinunter, B = waten bis zum nassen Sand, C = Lauf zum Ziel
+          const tipX = cx + 6.55, x0 = cx + s.inX, sh = shoreX(s.sz), xWet = Math.max(tipX, sh + 1), xEnd = sh + s.stopS;
+          const LA = tipX - x0, LB = xWet - tipX, LC = Math.max(0, xEnd - xWet);
+          const dt = t - s.tExit, tA = LA / s.vw, tB = LB / s.vw, tC = LC / s.vr;
+          let x, y, z = s.sz;
+          if (dt < tA + tB) {
+            const d = dt * s.vw; x = x0 + d;
+            y = x < cx + 4.55 ? floorY : x < tipX ? H.lerp(floorY, terrainY(tipX, s.sz), (x - cx - 4.55) / 2.0) : terrainY(x, s.sz);
+            s.f.userData.walkDist(d, 1);
+          } else {
+            const dc = Math.min(LC, (dt - tA - tB) * s.vr), dDie = s.die !== null ? s.die : 1e9;
+            x = xWet + Math.min(dc, dDie); z = H.lerp(s.sz, s.tz, LC ? Math.min(dc, dDie) / LC : 1); y = terrainY(x, z);
+            if (dc >= dDie) { const td = s.tExit + tA + tB + dDie / s.vr; s.f.userData.pose('Dying_Falling_Forward', (t - td) * 1.1); }
+            else if (dc >= LC) s.f.userData.pose(s.stopPose, t + s.ph);
+            else s.f.userData.walkDist(dc, 1.3);
+          }
+          s.f.position.set(x, y, z); s.f.rotation.y = 0;
         }
         for (const bk of bunkers) {                                                           // MG feuert in kurzen Stößen auf den Strand
           const k = (t * 3 + bk.ph) % 1, on = k < .5 && t > 1.5;
