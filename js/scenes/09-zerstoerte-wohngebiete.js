@@ -7,7 +7,7 @@ const { P } = H;
 // Schutt, suchen, trauern; Opfer liegen am Straßenrand; einige gehen mit Habseligkeiten die Straße entlang
 // (feste Bahnen, niemand läuft durch etwas hindurch). Die Kamera fährt langsam die Straße hinein.
 export default {
-  id: 'zerstoerte-wohngebiete', title: 'Zerstörte Wohngebiete', seed: 19, duration: 8,
+  id: 'zerstoerte-wohngebiete', title: 'Zerstörte Wohngebiete', seed: 19, duration: 8, rev: 2,
   script: 'Viele Wohngebiete werden zerstört und zahlreiche Zivilisten sterben.',
   caption: { title: 'Der Morgen danach', sub: 'Zivile Opfer' },
   params: {
@@ -19,7 +19,7 @@ export default {
     skyColor: { type: 'color', value: '#1a2230', label: 'Himmel (Morgen)' },
     groundColor: { type: 'color', value: '#5a6370', label: 'Boden' },
     ruinColor: { type: 'color', value: '#566070', label: 'Ruinen' },
-    civilGlow: { type: 'color', value: '#dfe6f0', label: 'Leuchtfarbe Zivilisten' },
+    civilGlow: { type: 'boolean', value: false, label: 'Zivilisten als weiße Leuchtfiguren' },
     ...H.cameraParams([-24, 4.6, 1.2], [-15, 4.0, .8], [10, 1.2, 0], 40)
   },
   build({ scene, params: p, rng: r, shadows }) {
@@ -57,6 +57,8 @@ export default {
     for (const z of [-.55, .55]) { const w = H.cyl(.45, .45, .1, P.darkGrey, 12); w.rotation.x = Math.PI / 2; w.position.set(0, .45, z); cart.add(w); }
     for (let i = 0; i < 3; i++) { const c = H.crate(.45, '#6a5844'); c.position.set(-.4 + i * .4, .85, (r() - .5) * .3); cart.add(c); }
     cart.position.set(2, 0, 3.9); cart.rotation.y = .15; scene.add(cart);
+    // Kleidung in gedeckten Farben (keine weißen Leuchtfiguren)
+    const CLOTHES = ['#6b5b4a', '#4e5f7a', '#7a6e5a', '#5a6a5c', '#8a7a6a', '#5d4f63', '#6e6a62', '#46505e'];
     // Stehende Gruppen am Rand (Schutt räumen, suchen, trauern) und Opfer
     const still = [
       ['Digging_Hole_With_Shovel', -6, -3.9, -Math.PI / 2], ['Kneeling_In_Prayer', -1.5, -4.1, Math.PI / 2], ['Crying_And_Rubbing_Eyes', 0, -3.6, Math.PI],
@@ -65,7 +67,7 @@ export default {
     ];
     const people = [];
     still.forEach(([pose, x, z, ry], i) => {
-      const f = H.figure({ color: '#e8e3d8', scale: i === 2 ? .75 : 1, glow: p.civilGlow, strength: 1.05, model: 'civil', seed: i * 7 + 5, pose, loopPose: !/Laying/.test(pose) });
+      const f = H.figure({ color: CLOTHES[i % CLOTHES.length], scale: i === 2 ? .75 : 1, glow: p.civilGlow ? '#dfe6f0' : null, strength: 1.05, model: 'civil', seed: i * 7 + 5, pose, loopPose: !/Laying/.test(pose) });
       f.position.set(x, 0, z); f.rotation.y = ry; scene.add(f); people.push({ f, pose, ph: r() * 5 });
     });
     // Gehende auf festen Bahnen (je Bahn eine Richtung und ein Tempo)
@@ -74,11 +76,11 @@ export default {
     const walkers = [];
     for (let i = 0; i < p.walkers; i++) {
       const lane = i % LANES.length, dir = lane % 2 ? 1 : -1;
-      const clip = i % 3 === 1 ? 'Carrying_A_Box' : (i % 3 === 2 ? 'Injured_Walking' : 'Walk_Natural');
-      const f = H.figure({ color: '#e8e3d8', scale: i === 3 ? .72 : 1, glow: p.civilGlow, strength: 1.05, model: 'civil', clips: { idle: 'Standing_Idle_Loop', walk: clip, run: clip }, seed: 60 + i * 9 });
+      const clip = i % 3 === 1 ? 'Walk_Carry' : (i % 3 === 2 ? 'Injured_Walking' : 'Walk_Natural');
+      const f = H.figure({ color: CLOTHES[(i + 3) % CLOTHES.length], scale: i === 3 ? .78 : 1, glow: p.civilGlow ? '#dfe6f0' : null, strength: 1.05, model: 'civil', clips: { idle: 'Standing_Idle_Loop', walk: clip, run: clip }, seed: 60 + i * 9 });
       f.rotation.y = dir > 0 ? 0 : Math.PI; scene.add(f);
-      if (clip === 'Carrying_A_Box') { const c = H.crate(.42, '#6a5844'); c.position.set(.38, .82, 0); f.add(c); }   // Habseligkeiten in den Armen
-      walkers.push({ f, dir, z: LANES[lane], x0: (dir > 0 ? -14 : 14) + Math.floor(i / LANES.length) * 6 * -dir + r() * 2, v: laneV[lane] });
+      if (clip === 'Walk_Carry') { const c = H.crate(.42, '#6a5844'); c.position.set(.38, .82, 0); f.add(c); }   // Habseligkeiten in den Armen
+      walkers.push({ f, dir, z: LANES[lane], x0: (dir > 0 ? 0 : 22) + Math.floor(i / LANES.length) * 6 * dir + r() * 2, v: laneV[lane] });   // nie direkt vor der Kamera
     }
     const dust = p.dust > 0 ? H.particles(r, { count: p.dust, area: [60, 10, 20], color: '#d8d2c6', size: .07, opacity: .35 }) : null;
     if (dust) scene.add(dust);

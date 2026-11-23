@@ -171,7 +171,8 @@ export const CLIP_NAMES = ['Standing_Idle_Loop', 'Standing_Idle', 'Walking', 'Ru
 const ONESHOT = n => /Dying|Death|Salute|Pointing_Onward|Stepping_Forward/.test(n);
 const BROKEN_HIPS = n => n === 'Walking';   // Hüftspur dieses Clips liegt auf Bodenhöhe
 // Meter pro Clip-Durchlauf (vor dem Entfernen der Wurzelbewegung gemessen), damit Schritte zur Strecke passen
-const LOOP_M = { Rifle_Walk_Forward: 1.94, Rifle_Run_Forward: 2.43, Rifle_Walking_Crouched: 1.21, Injured_Walking: 2.1, Walking: 1.55, Walk_Natural: 1.62, Run_Natural: 1.63, Walk: 1.62, Run: 1.63, Running_Fast: 2.2, Jogging: 5.09, Pushing_Heavy_Object: 1.21 };
+// gemessen am Standbein (Fuß mit Bodenkontakt), Mittel über drei Figuren
+const LOOP_M = { Rifle_Walk_Forward: 1.91, Rifle_Run_Forward: 1.93, Rifle_Walking_Crouched: 1.21, Injured_Walking: 1.93, Walking: 1.55, Walk_Natural: 1.65, Walk_Carry: 1.65, Run_Natural: 1.63, Walk: 1.62, Run: 1.63, Running_Fast: 2.2, Jogging: 2.81, Pushing_Heavy_Object: 1.21 };
 const ROLE_CLIPS = {
   soldier: { idle: 'Rifle_Idle', walk: 'Rifle_Walk_Forward', run: 'Rifle_Run_Forward' },
   civil: { idle: 'Standing_Idle_Loop', walk: 'Walk_Natural', run: 'Run_Natural' }
@@ -298,6 +299,17 @@ export async function preloadModels(onProgress) {
       CLIPS[name] = c;
       if (!CLIP_NAMES.includes(name)) CLIP_NAMES.push(name);
     }
+  }
+  // Gehen mit Kiste: Beine und Hüfte aus dem natürlichen Gang, Oberkörper, Arme und Kopf in der Haltepose von
+  // „Carrying_A_Box“ (der Mixamo-Clip ist eine Pose im Stehen ohne Schritte, damit gingen Träger nur gleitend)
+  const W = CLIPS.Walk_Natural, C = CLIPS.Carrying_A_Box;
+  if (W && C && !CLIPS.Walk_Carry) {
+    const UPPER = /^(Spine|Spine1|Spine2|Neck|Head|(Left|Right)(Shoulder|Arm|ForeArm|Hand.*))\.quaternion$/;
+    const hold = new Map(C.tracks.filter(tr => UPPER.test(tr.name)).map(tr => [tr.name, tr.values.slice(0, 4)]));
+    const tracks = W.tracks.filter(tr => !hold.has(tr.name)).map(tr => tr.clone());
+    for (const [nm, q] of hold) tracks.push(new THREE.QuaternionKeyframeTrack(nm, [0, W.duration], [...q, ...q]));
+    const c = new THREE.AnimationClip('Walk_Carry', W.duration, tracks); c.userData = W.userData;
+    CLIPS.Walk_Carry = c; CLIP_NAMES.push('Walk_Carry');
   }
   return MODELS;
 }
