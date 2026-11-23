@@ -1936,7 +1936,8 @@ export function table(w = 4, d = 1.4, h = .8, color = P.brown) {
 export function paper(w = .6, h = .8) {
   const m = mesh(new THREE.BoxGeometry(w, .01, h), P.white); m.castShadow = false;
   const lines = new THREE.Group();
-  for (let i = 0; i < 6; i++) { const l = box(w * .7, .012, .03, P.darkGrey); l.castShadow = false; l.position.set(-w * .05, .01, -h * .3 + i * h * .1); lines.add(l); }
+  for (let i = 0; i < 6; i++) { const l = box(w * .7, .012, h * .034, P.darkGrey);   // Zeilenstärke wächst mit dem Blatt
+  l.castShadow = false; l.position.set(-w * .05, .01, -h * .3 + i * h * .1); lines.add(l); }
   m.add(lines); m.userData.lines = lines.children;
   return m;
 }

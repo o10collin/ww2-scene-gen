@@ -3,7 +3,7 @@ import * as H from '../common.js';
 const { P } = H;
 
 export default {
-  id: 'fuehrerbunker', title: 'Berlin, 30. April 1945', seed: 22, duration: 10, rev: 2,
+  id: 'fuehrerbunker', title: 'Berlin, 30. April 1945', seed: 22, duration: 10, rev: 3,
   script: 'Hitler nimmt sich am 30. April 1945 durch einen Pistolenschuss in die rechte Schläfe dann endgültig das Leben.',
   caption: { title: 'Das Ende im Bunker', sub: '30. April 1945' },
   params: {
@@ -30,15 +30,41 @@ export default {
     const L = H.lights(scene, { sun: [-6, 14, 10], intensity: .7, hemi: .7, shadows, skyColor: p.skyColor, groundColor: '#222', shadowSize: 50 });
     // Oberfläche: Ruinenstadt hinter der Schnittkante (z < 0)
     const surf = H.ground(140, '#4d4a46'); surf.position.set(0, 0, -70); scene.add(surf);
+    // Oberfläche auch vor der Schnittkante (z > 0): von oben verdeckt sie den Bunker vollständig. Sie ist nur von oben
+    // sichtbar (einseitig) – sobald die Kamera unter die Erdoberfläche sinkt, gibt sie den Schnitt frei.
+    const front = H.ground(140, '#4d4a46'); front.scale.y = 60 / 140; front.position.set(0, 0, 30); scene.add(front);
+    // Garten der Reichskanzlei über dem Bunker: Notausgang (Betonblock mit Tür) und kegelförmiger Turm, kahle,
+    // zerschossene Bäume, Granattrichter, Trümmer
+    const conc = '#77746e', concD = '#5d5a55';
+    const exitB = H.box(4.2, 3.0, 3.4, conc); exitB.position.set(1.5, 1.5, -3.2); scene.add(exitB);
+    const exitTop = H.box(4.6, .35, 3.8, concD); exitTop.position.set(1.5, 3.17, -3.2); scene.add(exitTop);
+    const exitDoor = H.box(1.1, 2.0, .1, '#2c2a27'); exitDoor.position.set(1.5, 1.0, -1.47); scene.add(exitDoor);
+    const tower = H.cyl(1.25, 1.45, 4.2, conc, 16); tower.position.set(-2.6, 2.1, -4.2); scene.add(tower);
+    const cap = H.cone(1.6, 1.9, concD, 16); cap.position.set(-2.6, 5.15, -4.2); scene.add(cap);
+    for (const a of [0, 2.1, 4.2]) { const slit = H.box(.5, .14, .1, '#1d1c1a'); slit.position.set(-2.6 + Math.sin(a) * 1.3, 3.2, -4.2 + Math.cos(a) * 1.3); slit.rotation.y = a; scene.add(slit); }
+    // Alles, was vor der Schnittkante (z > 0) auf der Oberfläche steht, liegt in einer Gruppe: Sobald die Kamera unter
+    // die Erdoberfläche sinkt, wäre es dort vom Erdreich verdeckt -> ausblenden (die Fläche selbst ist von unten unsichtbar)
+    const frontDeco = new THREE.Group(); scene.add(frontDeco);
+    const put = (o, z) => (z > 0 ? frontDeco : scene).add(o);
+    const tree = (x, z, h) => {
+      const g = new THREE.Group(), bark = '#2e2924';
+      const trunk = H.cyl(.12, .2, h, bark, 6); trunk.position.y = h / 2; g.add(trunk);
+      for (let k = 0; k < 4; k++) { const len = h * (.25 + r() * .2), br = H.cyl(.03, .07, len, bark, 5); const a = r() * 6.28, el = .5 + r() * .5; br.position.set(Math.cos(a) * Math.sin(el) * len / 2, h * (.55 + k * .1) + Math.cos(el) * len / 2, Math.sin(a) * Math.sin(el) * len / 2); br.rotation.set(Math.sin(a) * el, 0, -Math.cos(a) * el); g.add(br); }
+      g.position.set(x, 0, z); g.rotation.z = (r() - .5) * .12; put(g, z);
+    };
+    for (const [x, z, h] of [[-9, -6, 5.5], [8.5, -9, 4.2], [-15, 4, 4.8], [13, 6, 3.6], [-6, 12, 3.2], [18, -3, 5.0]]) tree(x, z, h);
+    for (const [x, z, rr] of [[-5, 6, 1.5], [6, 9, 1.2], [11, -2, 1.7], [-13, -2, 1.3], [2, 15, 1.4]]) { const c = H.crater(rr, '#3b3833'); c.position.set(x, 0, z); put(c, z); }
+    for (let i = 0; i < 40; i++) { const b = H.box(.3 + r() * 1.0, .15 + r() * .4, .3 + r() * 1.0, r() < .5 ? '#5a5752' : '#45423e'); const x = -26 + r() * 52, z = -12 + r() * 40; if (Math.abs(x - 1.5) < 3 && Math.abs(z + 3.2) < 2.6) continue; b.position.set(x, .12, z); b.rotation.y = r() * 3; put(b, z); }   // Trümmer
     const city = H.city(r, { count: p.ruins, area: 70, minH: 3, maxH: 11, colors: ['#5a5752', '#6a655e', '#4b4845'], ruined: true });
     city.position.z = -42; scene.add(city);
     const smokes = [];
     for (let i = 0; i < 5; i++) { const s = H.smokeColumn(r, { height: 16, width: 1.8, color: '#3d3b39' }); s.position.set(-30 + r() * 60, 3, -20 - r() * 40); scene.add(s); smokes.push(s); }
     // Erdreich im Schnitt
     const earth = (w, h, d, x, y, z) => { const b = H.box(w, h, d, p.earthColor); b.position.set(x, y, z); b.receiveShadow = false; scene.add(b); };
-    earth(140, 14, 64, 0, -7, -38);        // hinter dem Raum
+    // Oberkanten 2 cm unter der Erdoberfläche (sonst flimmern die deckungsgleichen Flächen)
+    earth(140, 13.98, 64, 0, -7.01, -38);  // hinter dem Raum
     earth(140, 4.6, 6, 0, -11.9, -3);       // unter dem Raum
-    earth(140, 4.5, 6, 0, -2.25, -3);       // über dem Raum
+    earth(140, 4.48, 6, 0, -2.26, -3);      // über dem Raum
     earth(64, 5.5, 6, -38, -7.25, -3);      // links
     earth(64, 5.5, 6, 38, -7.25, -3);       // rechts
     // Bunkerraum: Boden -9.5 … Decke -4.5, x -6…6, z -6…0
@@ -122,7 +148,7 @@ export default {
     const bulb = new THREE.Mesh(new THREE.SphereGeometry(.12, 10, 8), new THREE.MeshBasicMaterial({ color: p.lampColor })); bulb.position.set(0, -5.65, -3); scene.add(bulb);
     const lamp = new THREE.PointLight(p.lampColor, 18, 16, 1.6); lamp.position.set(0, -5.8, -3); scene.add(lamp);
     const flash = new THREE.PointLight('#ffffff', 0, 20); flash.position.set(2, -7.5, -4); scene.add(flash);
-    const from = new THREE.Vector3(), to = new THREE.Vector3(), look0 = new THREE.Vector3(), look1 = new THREE.Vector3();
+    let camPath = null, lookPath = null, camKey = ''; const lookTmp = new THREE.Vector3();
     const wallMap = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.6), new THREE.MeshLambertMaterial({ color: '#8a8673', map: H.terrainTexture() })); wallMap.position.set(-3.2, -6.6, -5.82); scene.add(wallMap);
     const mapFrame = H.box(2.55, 1.75, .04, '#2a2420'); mapFrame.position.set(-3.2, -6.6, -5.86); scene.add(mapFrame);
     const phone = H.box(.35, .2, .25, P.black); phone.position.set(3.2, -8.63, -3.2); scene.add(phone);
@@ -144,14 +170,21 @@ export default {
         L.sun.intensity = .7; L.hemi.intensity = .7 * (after > 0 ? .5 : 1);
       },
       camera(t, cam, p) {
-        // Abstieg von der Ruinenstadt in den Bunker, dann langsame Fahrt auf das Sofa zu
-        const u = H.easeInOut(H.span(t, p.tDescend, p.tDescend + p.descendDur));
-        const c = H.easeInOut(H.span(t, p.tDescend + p.descendDur, p.tShot - .3));
-        from.set(p.camFromX, p.camFromY, p.camFromZ); to.set(p.camToX, p.camToY, p.camToZ);
-        look0.set(p.lookX, p.lookY, p.lookZ); look1.set(p.lookEndX, p.lookEndY, p.lookEndZ);
-        cam.position.lerpVectors(from, to, u).lerp(new THREE.Vector3(p.closeX, p.closeY, p.closeZ), c);
-        cam.position.x += Math.sin(t * .4) * .3 * (1 - u);
-        cam.lookAt(look0.lerp(look1, u).lerp(new THREE.Vector3(-2.5, -8.55, -5.1), c));
+        // Eine durchgehende, gleichmäßige Fahrt: über der Ruinenstadt (Bunker verdeckt) senkrecht unter die
+        // Erdoberfläche bis vor den Schnitt und weiter auf das Sofa zu. Position und Blick folgen je einer Spline,
+        // Tempo nach Bogenlänge mit einer einzigen weichen Beschleunigung/Abbremsung (kein Halt zwischen den Phasen).
+        if (!camPath || camKey !== [p.camFromX, p.camFromY, p.camFromZ, p.camToX, p.camToY, p.camToZ, p.closeX, p.closeY, p.closeZ, p.lookX, p.lookY, p.lookZ, p.lookEndX, p.lookEndY, p.lookEndZ].join()) {
+          camKey = [p.camFromX, p.camFromY, p.camFromZ, p.camToX, p.camToY, p.camToZ, p.closeX, p.closeY, p.closeZ, p.lookX, p.lookY, p.lookZ, p.lookEndX, p.lookEndY, p.lookEndZ].join();
+          const A = new THREE.Vector3(p.camFromX, p.camFromY, p.camFromZ), B = new THREE.Vector3(p.camToX, p.camToY, p.camToZ), C = new THREE.Vector3(p.closeX, p.closeY, p.closeZ);
+          const M = new THREE.Vector3(A.x + (B.x - A.x) * .35, (A.y + B.y) * .5 - 1.2, A.z + (B.z - A.z) * .6);   // weicher Bogen nach unten
+          camPath = new THREE.CatmullRomCurve3([A, M, B, C], false, 'centripetal');
+          const LA = new THREE.Vector3(p.lookX, p.lookY, p.lookZ), LB = new THREE.Vector3(p.lookEndX, p.lookEndY, p.lookEndZ), LC = new THREE.Vector3(-2.5, -8.55, -5.1);
+          lookPath = new THREE.CatmullRomCurve3([LA, LA.clone().lerp(LB, .5), LB, LC], false, 'centripetal');
+        }
+        const u = H.easeInOut(H.span(t, p.tDescend, p.tShot - .3));
+        camPath.getPointAt(u, cam.position);
+        frontDeco.visible = cam.position.y > .05;
+        cam.lookAt(lookPath.getPointAt(u, lookTmp));
       }
     };
   }

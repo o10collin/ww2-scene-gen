@@ -3,7 +3,7 @@ import * as H from '../common.js';
 const { P } = H;
 
 export default {
-  id: 'kapitulation-japan', title: 'Kapitulation Japans', seed: 26, duration: 8,
+  id: 'kapitulation-japan', title: 'Kapitulation Japans', seed: 26, duration: 8, rev: 2,
   script: 'Am 2. September kapituliert dann schließlich auch Japan.',
   caption: { title: 'Kriegsende', sub: '2. September 1945' },
   params: {
@@ -35,11 +35,11 @@ export default {
     // Tisch mit Dokument
     const tbl = H.table(3, 1.2, .8, '#4a3f36'); tbl.position.set(0, 0, 0); scene.add(tbl);
     const cloth = H.box(3.1, .03, 1.25, '#3e5a3a'); cloth.position.set(0, .85, 0); scene.add(cloth);
-    const pap = H.paper(.7, .9); pap.position.set(0, .88, .1); scene.add(pap);
+    const pap = H.paper(.3, .42); pap.position.set(0, .875, .22); pap.rotation.y = .06; scene.add(pap);   // etwa A4 im Maßstab der Figuren
     const sig = H.signing(pap, P.black);
-    const signer = H.figure({ color: '#2a2b30', glow: H.ROLE.axis, model: 'suit', pose: 'Male_Writing_While_Seated', seed: 9 }); signer.position.set(0, 0, 1.1); signer.rotation.y = Math.PI / 2; scene.add(signer);
-    const sChair = H.chair(); sChair.rotation.y = Math.PI; sChair.position.set(0, 0, 1.3); scene.add(sChair);
-    const armL = signer.userData.armL, armR = signer.userData.armR;
+    // Hüfte liegt bei dieser Sitzanimation 18 cm vor dem Figurenursprung und 8 cm höher als bei den übrigen Sitzposen
+    const signer = H.figure({ color: '#2a2b30', glow: H.ROLE.axis, model: 'suit', pose: 'Male_Writing_While_Seated', seed: 9 }); signer.position.set(0, -.08, .82); signer.rotation.y = Math.PI / 2; scene.add(signer);
+    const sChair = H.chair(); sChair.rotation.y = Math.PI; sChair.position.set(0, 0, .7); scene.add(sChair);   // direkt unter der Hüfte
     const officers = ['#6b6f58', '#f0efe8', '#6b6f58', '#f0efe8', '#4a4f44'];
     officers.forEach((c, i) => { const f = H.figure({ color: c, glow: H.ROLE.west, model: i % 2 ? 'suit' : 'soldier', seed: i + 21, pose: i === 1 ? 'Formal_Military_Salute' : null }); f.position.set(-2.4 + i * 1.2, 0, -1.2); f.rotation.y = -Math.PI / 2; scene.add(f); });
     const sailors = [];
@@ -60,10 +60,6 @@ export default {
         water.userData.at(t); fl.userData.at(t);
         const u = H.span(t, p.tSign, p.tSign + p.signDur);
         sig.at(u);
-        const writing = u > 0 && u < 1;
-        armR.rotation.z = writing ? -1.2 + Math.sin(t * 12) * .08 : -.2;
-        armL.rotation.z = writing ? -.9 : -.1;
-        signer.rotation.x = writing ? .18 : 0;
         for (const s of sailors) s.f.position.y = Math.sin(t * 1.5 + s.ph) * .015;
       }
     };
