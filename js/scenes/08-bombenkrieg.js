@@ -7,7 +7,7 @@ const { P } = H;
 // einschlagen, wo danach Feuerball, Brand und aufsteigender Rauch stehen. Suchscheinwerfer tasten den Himmel ab,
 // Flakwolken platzen in Höhe der Bomber. Kamera niedrig über den Dächern.
 export default {
-  id: 'bombenkrieg', title: 'Bombenkrieg', seed: 18, duration: 10, rev: 2,
+  id: 'bombenkrieg', title: 'Bombenkrieg', seed: 18, duration: 10, rev: 3,
   script: 'Auf Seiten der Alliierten wird daraufhin auch eskaliert. Sie fangen damit an, deutsche Städte und Industrieanlagen zu bombardieren.',
   caption: { title: 'Luftkrieg gegen deutsche Städte', sub: '1943' },
   params: {
@@ -36,32 +36,39 @@ export default {
     const church = new THREE.Group();
     const nave = H.box(8, 9, 16, '#3a404b'); nave.position.y = 4.5; const roof = H.mesh(new THREE.CylinderGeometry(0, 5.6, 4, 4), '#2a2f38'); roof.rotation.y = Math.PI / 4; roof.position.y = 11; roof.scale.z = 2.9;
     const tower = H.box(4, 20, 4, '#3a404b'); tower.position.set(0, 10, 10); const spire = H.cone(2.8, 8, '#2a2f38', 4); spire.position.set(0, 24, 10);
-    church.add(nave, roof, tower, spire); church.position.set(12, 0, -24); scene.add(church);
+    church.add(nave, roof, tower, spire); church.position.set(14, 0, -60); scene.add(church);   // außerhalb des Flugkorridors (z -30 … -2)
 
-    // Bomberverband: Keilformation, fliegt in +X; Bomben werden über der Stadt ausgeklinkt
-    const g = 9.81, fallT = Math.sqrt(2 * p.altitude / g);
+    // Bomber im Sturzangriff wie in Szene 1: jede Maschine fliegt eine eigene Bahn (Anflug, Sinkflug, tiefster Punkt
+    // über dem Ziel, Hochziehen, Abflug aus dem Bild). Die Nase zeigt stets entlang der Bahn. Die Bomben werden am
+    // tiefsten Punkt ausgeklinkt, übernehmen Tempo und Richtung der Maschine und fallen ballistisch; wo sie aufschlagen,
+    // stehen Feuerball, Brand, Feuerschein und Rauch.
+    const g = 9.81, V = p.speed;
     const bombers = [], bombs = [];
+    const P = (x, y, z) => new THREE.Vector3(x, y, z);
     for (let i = 0; i < p.bombers; i++) {
-      const row = Math.ceil(i / 2), side = i % 2 ? 1 : -1;
-      // jede Maschine etwas anders: zwei- oder viermotorig, Spannweite, Rumpflänge, Farbton, leichtes Schaukeln
       const tint = new THREE.Color(p.bomberGlow).offsetHSL((r() - .5) * .04, (r() - .5) * .2, (r() - .5) * .14);
       const four = r() < .65, span = four ? 6.6 + r() * 1.6 : 5.2 + r() * 1.0;
       const m = H.faceZ(H.aircraft(H.glowMat(tint, 1.45 + r() * .35), { span, length: span * (.66 + r() * .1), engines: four ? 4 : 2 })); scene.add(m);
-      const b = { m, ph: r() * 6, roll: .04 + r() * .05, z: side * row * 5.5 - 12 + (r() - .5), lag: row * 6, y: p.altitude + row * .8 + r() };
+      const xT = -26 + r() * 22, z = -30 + (i + .5) * (28 / p.bombers) + (r() - .5) * 2, alt = p.altitude + r() * 4, low = Math.max(9, alt - 8 - r() * 3);
+      const curve = new THREE.CatmullRomCurve3([P(xT - 70, alt + 2, z - 3), P(xT - 26, alt, z - 1), P(xT - 9, low + 3, z), P(xT, low, z), P(xT + 11, low + 3.5, z), P(xT + 34, alt + 2, z + 1), P(xT + 80, alt + 8, z + 3)], false, 'centripetal');
+      const L = curve.getLength(), N = 600;
+      let uLow = 0, yMin = 1e9; for (let k = 0; k <= N; k++) { const y = curve.getPointAt(k / N).y; if (y < yMin) { yMin = y; uLow = k / N; } }
+      const tRel = 1.6 + i * (6.2 / Math.max(1, p.bombers - 1 || 1)) + (r() - .5) * .3;   // Zeitpunkt am tiefsten Punkt
+      const b = { m, curve, L, sLow: uLow * L, tRel, roll: (r() - .5) * .25 };
       bombers.push(b);
-      const x0 = -44 - b.lag;                               // Startposition, x(t) = x0 + v t
       for (let k = 0; k < p.bombsPer; k++) {
-        const xRel = Math.max(-38 - b.lag + 8, -30 + r() * 24 + k * 4);                // Abwurf so, dass der Einschlag in der Stadt liegt
-        const tRel = (xRel - x0) / p.speed;
-        const ft = Math.sqrt(2 * b.y / g);
-        const ix = xRel + p.speed * ft, iz = b.z + (r() - .5) * 1.2;
+        const ds = (k - (p.bombsPer - 1) / 2) * 1.6, s0 = b.sLow + ds;                 // kurze Reihe um den tiefsten Punkt
+        const p0 = curve.getPointAt(s0 / L), v0 = curve.getTangentAt(s0 / L).multiplyScalar(V);
+        p0.y -= .7;
+        const ft = (v0.y + Math.sqrt(v0.y * v0.y + 2 * g * p0.y)) / g;                  // Fallzeit bis zum Boden
+        const ix = p0.x + v0.x * ft, iz = p0.z + v0.z * ft;
         const model = H.bomb(1.6, H.glowMat(p.bombColor, 1.25), .2); model.visible = false; scene.add(model);
         const boom = H.fireball(r, { size: 2.6 + r() * 2.2, duration: 2.0 + r() * 1.2, debris: 20 + Math.floor(r() * 25), sparks: 40 + Math.floor(r() * 50), ring: r() < .6, variant: bombs.length % 5 });
         boom.position.set(ix, 0, iz); boom.rotation.y = r() * 6.28; boom.scale.set(1, .85 + r() * .35, 1); scene.add(boom);
         const fire = H.flame(r, { size: 1.8 + r() * .8 }); fire.position.set(ix, 0, iz); fire.visible = false; scene.add(fire);
-        const smoke = H.smokeColumn(r, { height: 18, width: 2.2, color: '#4a4542' });
-        const glow = new THREE.PointLight('#ff8a3a', 0, 22, 1.6); glow.position.set(ix, 3, iz); scene.add(glow); smoke.position.set(ix, 1, iz); smoke.visible = false; scene.add(smoke);
-        bombs.push({ b, model, tRel, ft, xRel, ix, iz, boom, fire, smoke, glow, ph: r() * 6 });
+        const smoke = H.smokeColumn(r, { height: 18, width: 2.2, color: '#4a4542' }); smoke.position.set(ix, 1, iz); smoke.visible = false; scene.add(smoke);
+        const glow = new THREE.PointLight('#ff8a3a', 0, 22, 1.6); glow.position.set(ix, 3, iz); scene.add(glow);
+        bombs.push({ model, tRel: tRel + ds / V, ft, p0, v0, boom, fire, smoke, glow, ph: r() * 6 });
       }
     }
     // Suchscheinwerfer vom Boden, langsam schwenkend
@@ -82,14 +89,22 @@ export default {
 
     return {
       update(t, p) {
-        for (const b of bombers) { b.m.position.set(-44 - b.lag + t * p.speed, b.y + Math.sin(t * .9 + b.ph) * .25, b.z); b.m.rotation.x = Math.sin(t * .7 + b.ph) * b.roll; }
+        const tg = new THREE.Vector3(), q = new THREE.Vector3();
+        for (const b of bombers) {
+          const sArc = b.sLow + (t - b.tRel) * p.speed;
+          b.m.visible = sArc > 0 && sArc < b.L;
+          if (!b.m.visible) continue;
+          const u = sArc / b.L;
+          b.curve.getPointAt(u, b.m.position); b.curve.getTangentAt(u, tg);
+          b.m.lookAt(q.copy(b.m.position).add(tg));                                           // Nase entlang der Bahn
+          b.m.rotateZ(b.roll * Math.sin(u * Math.PI));                                         // leichte Querlage in der Kurve
+        }
         for (const bm of bombs) {
           const age = t - bm.tRel;
           bm.model.visible = age >= 0 && age < bm.ft;
           if (bm.model.visible) {
-            const x = bm.xRel + p.speed * age, y = bm.b.y - .6 - .5 * g * age * age;
-            bm.model.position.set(x, y, bm.iz);
-            bm.model.lookAt(x + p.speed, y - g * age, bm.iz);              // Spitze entlang der Flugbahn
+            bm.model.position.copy(bm.p0).addScaledVector(bm.v0, age); bm.model.position.y -= .5 * g * age * age;
+            bm.model.lookAt(q.copy(bm.model.position).add(tg.set(bm.v0.x, bm.v0.y - g * age, bm.v0.z)));   // Spitze entlang der Flugbahn
           }
           const hit = age - bm.ft;
           bm.boom.userData.at(hit);
