@@ -77,9 +77,8 @@ export default {
     for (let i = 0; i < p.walkers; i++) {
       const lane = i % LANES.length, dir = lane % 2 ? 1 : -1;
       const clip = i % 3 === 1 ? 'Walk_Carry' : (i % 3 === 2 ? 'Injured_Walking' : 'Walk_Natural');
-      const f = H.figure({ color: CLOTHES[(i + 3) % CLOTHES.length], scale: i === 3 ? .78 : 1, glow: p.civilGlow ? '#dfe6f0' : null, strength: 1.05, model: 'civil', clips: { idle: 'Standing_Idle_Loop', walk: clip, run: clip }, seed: 60 + i * 9 });
+      const f = H.figure({ color: CLOTHES[(i + 3) % CLOTHES.length], scale: i === 3 ? .78 : 1, glow: p.civilGlow ? '#dfe6f0' : null, strength: 1.05, model: 'civil', clips: { idle: 'Standing_Idle_Loop', walk: clip, run: clip }, seed: 60 + i * 9, carry: clip === 'Walk_Carry' });
       f.rotation.y = dir > 0 ? 0 : Math.PI; scene.add(f);
-      if (clip === 'Walk_Carry') { const c = H.crate(.42, '#6a5844'); c.position.set(.38, .82, 0); f.add(c); }   // Habseligkeiten in den Armen
       walkers.push({ f, dir, z: LANES[lane], x0: (dir > 0 ? 0 : 22) + Math.floor(i / LANES.length) * 6 * dir + r() * 2, v: laneV[lane] });   // nie direkt vor der Kamera
     }
     const dust = p.dust > 0 ? H.particles(r, { count: p.dust, area: [60, 10, 20], color: '#d8d2c6', size: .07, opacity: .35 }) : null;

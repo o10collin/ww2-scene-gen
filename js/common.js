@@ -356,7 +356,7 @@ export function animateFigures(t) {
   }
 }
 
-export function figure({ color = P.grey, head = P.skin, helmet = null, scale = 1, glow = null, strength = ROLE.strength, model = 'auto', pose = null, seed = 0, loopPose = false, clips = null, weapon = null } = {}) {
+export function figure({ color = P.grey, head = P.skin, helmet = null, scale = 1, glow = null, strength = ROLE.strength, model = 'auto', pose = null, seed = 0, loopPose = false, clips = null, weapon = null, carry = null } = {}) {
   const g = new THREE.Group();
   const gm = glow ? glowMat(glow, strength) : null;
   const groupKey = model === 'auto' ? (helmet ? 'soldier' : 'civil') : model;
@@ -392,9 +392,30 @@ export function figure({ color = P.grey, head = P.skin, helmet = null, scale = 1
       for (const [nm, a] of Object.entries(actions)) { const on = nm === name; a.enabled = on; a.paused = false; a.setEffectiveWeight(on ? weight : 0); }
       mixer.setTime(time);                                                            // Einmal-Clips bleiben am Ende stehen (clampWhenFinished), beim Zurückspulen wieder frei
       if (gun) placeGun(name);
+      if (box) placeBox();
     };
     // Gewehr: bei Gewehr-Clips in den Händen (Griff in der rechten Hand, Lauf nach vorn zur linken Hand), sonst
     // umgehängt auf dem Rücken (Lauf schräg über die rechte Schulter). Jedes Bild aus den Knochen gesetzt.
+    // Getragene Kiste: jedes Bild zwischen die Hände gesetzt und mit dem Oberkörper gedreht (bewegt sich mit)
+    let box = null, placeBox = null;
+    if (carry) {
+      const hL = inst.getObjectByName(M.prefix + 'LeftHand'), hR = inst.getObjectByName(M.prefix + 'RightHand'), sp = inst.getObjectByName(M.prefix + 'Spine2');
+      if (hL && hR && sp) {
+        const size = typeof carry === 'number' ? carry : .5;
+        box = crate(size, '#6a5844'); box.traverse(o => { if (o.isMesh) o.castShadow = true; }); g.add(box);
+        const a = new THREE.Vector3(), b = new THREE.Vector3(), q = new THREE.Quaternion(), qg = new THREE.Quaternion(), sc = new THREE.Vector3();
+        placeBox = () => {
+          g.updateMatrixWorld(true);
+          hL.getWorldPosition(a); hR.getWorldPosition(b); a.add(b).multiplyScalar(.5);
+          const k = g.getWorldScale(sc).x;
+          a.y -= size * .5 * k;                                                    // Hände greifen die Kiste seitlich in halber Höhe
+          box.position.copy(g.worldToLocal(a));
+          sp.getWorldQuaternion(q); g.getWorldQuaternion(qg);
+          box.quaternion.copy(qg.invert().multiply(q)); box.rotation.set(0, box.rotation.y, 0);
+          box.position.add(b.set(.13 / k, 0, 0).applyQuaternion(box.quaternion));   // vor den Bauch, nicht in den Körper
+        };
+      }
+    }
     let gun = null, placeGun = null;
     if (weapon) {
       const B = n => inst.getObjectByName(M.prefix + n);
@@ -825,7 +846,8 @@ export function crate(size = .8, color = P.brown) {
   const b = box(size, size, size, color); b.position.y = size / 2; g.add(b);
   const dark = new THREE.Color(color).multiplyScalar(.6);
   for (const [x, y, z, rx, rz] of [[0, size / 2, size / 2 + .01, 0, Math.PI / 4], [0, size / 2, -size / 2 - .01, 0, -Math.PI / 4], [size / 2 + .01, size / 2, 0, Math.PI / 4, 0], [-size / 2 - .01, size / 2, 0, -Math.PI / 4, 0]]) {
-    const st = box(rz ? size * 1.3 : .06, .06, rx ? size * 1.3 : .06, dark); st.castShadow = false; st.position.set(x, y, z); st.rotation.set(0, 0, rz); if (rx) st.rotation.set(0, rx, 0); g.add(st);
+    // Diagonalleiste in der Seitenfläche (um die Flächennormale gedreht, ragt nicht heraus)
+    const st = box(rz ? size * 1.3 : .06, .06, rx ? size * 1.3 : .06, dark); st.castShadow = false; st.position.set(x, y, z); st.rotation.set(rx, 0, rz); g.add(st);
   }
   return g;
 }
