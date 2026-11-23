@@ -3,12 +3,12 @@ import * as H from '../common.js';
 const { P } = H;
 
 export default {
-  id: 'totaler-krieg', title: 'Totaler Krieg', seed: 16, duration: 7, rev: 2,
+  id: 'totaler-krieg', title: 'Totaler Krieg', seed: 16, duration: 7, rev: 3,
   script: 'Wenig später ruft die NS-Regierung den „totalen Krieg“ aus.',
   caption: { title: '„Totaler Krieg“', sub: 'Februar 1943' },
   params: {
     rows: { type: 'number', min: 2, max: 14, step: 1, value: 8, label: 'Reihen Publikum' },
-    cols: { type: 'number', min: 4, max: 24, step: 1, value: 14, label: 'Figuren pro Reihe' },
+    cols: { type: 'number', min: 4, max: 24, step: 1, value: 18, label: 'Figuren pro Reihe' },
     banners: { type: 'number', min: 0, max: 9, step: 1, value: 5, label: 'Banner' },
     bannerColor: { type: 'color', value: '#b4231c', label: 'Fahnenfarbe' },
     speakerGlow: { type: 'boolean', value: true, label: 'Redner leuchtet rot' },
@@ -17,8 +17,8 @@ export default {
     crowdColor: { type: 'color', value: '#5b5f6a', label: 'Publikum' },
     tRaise: { type: 'number', min: 0, max: 10, step: .1, value: 3.8, label: 'Arme hoch ab (s)' },
     spotIntensity: { type: 'number', min: 0, max: 600, step: 10, value: 220, label: 'Scheinwerfer' },
-    // Fokus auf den Redner: über die Köpfe des Publikums langsam auf das Pult zu
-    ...H.cameraParams([0, 4.6, 10], [0, 4.2, 5.2], [0, 3.6, -8.7], 30)
+    // von oben links (Galerie) über das Publikum auf den Redner, langsame Fahrt näher heran
+    ...H.cameraParams([-15, 14, 9], [-11, 11.5, 3], [0, 3.4, -8.5], 32)
   },
   build({ scene, params: p, rng: r, shadows }) {
     // Berliner Sportpalast, 18. Februar 1943 (Stil wie Szene 1: blaugraue Halle, Low-Poly, Lichtkegel)
@@ -83,14 +83,12 @@ export default {
       sp.position.set(x, 17, 4); sp.target.position.set(0, SH + 1.2, -8.5); sp.castShadow = false;
       scene.add(sp, sp.target);
       const len = sp.position.distanceTo(sp.target.position);
-      const beam = new THREE.Mesh(new THREE.ConeGeometry(2.6, len, 18, 1, true), new THREE.MeshBasicMaterial({ color: '#fff2d6', transparent: true, opacity: .022, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
-      beam.geometry.translate(0, -len / 2, 0); beam.position.copy(sp.position);
-      beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), sp.target.position.clone().sub(sp.position).normalize()); scene.add(beam);
     }
     const crowd = [];
     for (let i = 0; i < p.rows; i++) for (let j = 0; j < p.cols; j++) {
+      if (Math.abs((j - (p.cols - 1) / 2) * 1.4) < 2.4) continue;   // Mittelgang (Teppich) frei lassen
       const f = H.figure({ color: p.crowdColor, glow: p.crowdGlow ? H.ROLE.civil : null, strength: 1.25, model: 'civil', seed: i * 31 + j + 1 });
-      f.position.set((j - (p.cols - 1) / 2) * 1.4 + (r() - .5) * .5, 0, 2 - i * 1.7 + (r() - .5) * .5);
+      f.position.set((j - (p.cols - 1) / 2) * 1.4 + (r() - .5) * .3, 0, 2 - i * 1.7 + (r() - .5) * .3);
       f.rotation.y = Math.PI / 2 + (r() - .5) * .3; scene.add(f);
       crowd.push({ f, arms: [f.userData.armL, f.userData.armR], ph: r() * 6, delay: r() * .8 });
     }
