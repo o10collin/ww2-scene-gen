@@ -3,7 +3,7 @@ import * as H from '../common.js';
 const { P } = H;
 
 export default {
-  id: 'stalingrad', title: 'Stalingrad', seed: 14, duration: 9, rev: 2,
+  id: 'stalingrad', title: 'Stalingrad', seed: 14, duration: 9, rev: 3,
   script: 'Zwei Jahre später. Die Deutschen verlieren die Schlacht von Stalingrad.',
   caption: { title: 'Stalingrad', sub: 'Winter 1942/43' },
   params: {
@@ -156,8 +156,8 @@ export default {
     for (let i = 0; i < 4; i++) {
       const t0 = 1.6 + i * 1.7 + r() * .4, tk = tanks[i % Math.max(1, tanks.length)];
       const xTank = tk ? tk.x0 - (t0 - .25) * 2.2 * p.speed : 0;
-      const b = H.explosion({ size: 1.4, color: P.orange, smoke: '#555' });
-      b.position.set(xTank - 14 - r() * 5, .5, (r() < .5 ? -1 : 1) * (6.5 + r() * 1.5)); scene.add(b);
+      const b = H.fireball(r, { size: 1.5 + r() * .5, duration: 2.0, debris: 18, sparks: 40, ring: false, variant: i });   // wie die Einschläge in Szene 1/8
+      b.position.set(xTank - 14 - r() * 5, 0, (r() < .5 ? -1 : 1) * (6.6 + r() * 1.2)); b.rotation.y = r() * 6.28; scene.add(b);
       booms.push({ b, t0 });
       if (tk) tk.shots.push({ ts: t0 - .25, at: b.position.clone() });
     }
@@ -206,7 +206,7 @@ export default {
       const sb = H.sandbags(r, 9); sb.position.set(-6, 0, 6.2); sb.rotation.y = .1; scene.add(sb);
       for (let i = 0; i < 5; i++) { const b = H.barrel(i % 2 ? '#4a4e57' : '#5a3a30'); b.position.set(-20 + r() * 40, 0, edge()); b.rotation.z = r() < .3 ? Math.PI / 2 : 0; scene.add(b); }
       for (let i = 0; i < 4; i++) { const c = H.crater(.6 + r() * .4, '#5e6a78'); c.position.set(-22 + r() * 44, 0, (r() - .5) * .6); scene.add(c); }   // Krater in der Panzerspur
-      const wreck = H.truck('#3b3f46'); wreck.position.set(-14, 0, -7.0); wreck.rotation.set(0, 2.9, .12); scene.add(wreck);
+      const wreck = H.truck('#3b3f46'); wreck.position.set(-3, 0, -7.2); wreck.rotation.set(0, 2.9, .12); scene.add(wreck);
       for (let i = 0; i < 3; i++) { const c = H.crate(.7 + r() * .4, '#5a4a3a'); c.position.set(-2 + r() * 10, 0, 5.6 + r() * 1.2); c.rotation.y = r() * 3; scene.add(c); }
     }
 

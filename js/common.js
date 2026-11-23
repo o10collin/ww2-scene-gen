@@ -760,13 +760,17 @@ export function ruin(w, h, d, color, r = Math.random) {
     }
   }
   // eingestürzte Geschossdecken und Stahlträger
-  for (let i = 0; i < 3; i++) {
-    const slab = box(w * (.3 + r() * .4), .18, d * .5, dark);
-    slab.position.set((r() - .5) * w * .6, .4 + r() * h * .4, d * .3); slab.rotation.set((r() - .5) * .6, r() * .4, (r() - .5) * .5); g.add(slab);
+  // (bleiben innerhalb der Gebäudetiefe und hängen nur leicht schräg, keine dunklen Keile vor der Fassade)
+  const mid = new THREE.Color(color).multiplyScalar(.72);
+  for (let i = 0; i < 2; i++) {
+    const slab = box(w * (.25 + r() * .3), .16, d * .42, mid);
+    slab.position.set((r() - .5) * w * .5, .6 + r() * h * .3, -d * .05); slab.rotation.set((r() - .5) * .25, 0, (r() - .5) * .35); g.add(slab);
   }
-  for (let i = 0; i < 4; i++) {
-    const bar = cyl(.03, .03, 1.2 + r() * 1.5, '#2a2a2a', 5); bar.castShadow = false;
-    bar.position.set((r() - .5) * w, heights[i % heights.length] + .4, (r() - .5) * d); bar.rotation.set((r() - .5) * 1.2, 0, (r() - .5) * 1.2); g.add(bar);
+  // wenige, kurze Stahlstäbe oben auf den Abbruchkanten (fast senkrecht, rostbraun)
+  for (let i = 0; i < 2; i++) {
+    const k = Math.floor(r() * heights.length), len = .45 + r() * .55;
+    const bar = cyl(.025, .025, len, '#3d3129', 5); bar.castShadow = false;
+    bar.position.set(-w / 2 + (k + .2 + r() * .6) * (w / heights.length), heights[k] + len * .45, (r() - .5) * d * .4); bar.rotation.set((r() - .5) * .35, 0, (r() - .5) * .35); g.add(bar);
   }
   // Schutthaufen davor
   for (let i = 0; i < 9; i++) {
@@ -824,20 +828,30 @@ export function fence(length, { posts = 6, wires = 3, height = 2.2, color = P.da
   const g = new THREE.Group();
   for (let i = 0; i <= posts; i++) {
     const p = cyl(.04, .05, height, color, 6); p.position.set(-length / 2 + i * (length / posts), height / 2, 0); g.add(p);
-    if (barbed) { const t = box(.06, .5, .06, color); t.position.set(p.position.x, height + .2, -.15); t.rotation.x = .6; g.add(t); }
+    // Ausleger sitzt auf dem Pfostenkopf und neigt sich nach außen (-Z), oben trägt er den Stacheldraht
+    if (barbed) { const t = box(.05, .5, .05, color); t.position.set(p.position.x, height + .2, -.12); t.rotation.x = -.6; g.add(t); }
   }
   for (let w = 0; w < wires; w++) {
     const wire = cyl(.012, .012, length, '#9aa0a8', 4); wire.rotation.z = Math.PI / 2; wire.castShadow = false;
-    wire.position.set(0, height * (.35 + .3 * w / Math.max(1, wires - 1)), 0); g.add(wire);
+    wire.position.set(0, height * (.25 + .7 * w / Math.max(1, wires - 1)), 0); g.add(wire);
   }
-  if (barbed) { const top = cyl(.012, .012, length, '#9aa0a8', 4); top.rotation.z = Math.PI / 2; top.castShadow = false; top.position.set(0, height + .35, -.3); g.add(top); }
+  if (barbed) { const top = cyl(.012, .012, length, '#9aa0a8', 4); top.rotation.z = Math.PI / 2; top.castShadow = false; top.position.set(0, height + .4, -.26); g.add(top); }
   return g;
 }
-export function sandbags(r, n = 8, color = '#6f6650') {
-  const g = new THREE.Group();
-  for (let i = 0; i < n; i++) {
-    const b = mesh(new THREE.CapsuleGeometry(.16, .4, 3, 8), color); b.rotation.z = Math.PI / 2;
-    b.position.set((i % 4) * .55 - .8 + (i >= 4 ? .27 : 0), .16 + (i >= 4 ? .3 : 0), 0); b.rotation.y = (r() - .5) * .3; g.add(b);
+export function sandbags(r, n = 8, color = '#7a7058') {
+  // Sandsackmauer: flache, kissenförmige Säcke im Verband (jede Reihe um einen halben Sack versetzt, nach oben kürzer)
+  const g = new THREE.Group(), geo = new THREE.SphereGeometry(1, 12, 7);
+  const base = new THREE.Color(color), L = .56, H = .2;
+  const rows = n <= 4 ? 1 : n <= 9 ? 2 : 3;
+  let left = n;
+  for (let row = 0; row < rows && left > 0; row++) {
+    const cnt = Math.min(left, Math.ceil(n / rows) + (rows - 1 - row) - (row ? 1 : 0)); left -= cnt;
+    for (let i = 0; i < cnt; i++) {
+      const c = base.clone().offsetHSL(0, 0, (r() - .5) * .08);
+      const b = mesh(geo, c); b.scale.set(L * .52, H * .55, .19);
+      b.position.set((i - (cnt - 1) / 2) * L * .96, H * .5 + row * H * .9, (r() - .5) * .04); b.rotation.set(0, (r() - .5) * .12, (r() - .5) * .06);
+      g.add(b);
+    }
   }
   return g;
 }
@@ -868,9 +882,12 @@ export function truck(color = P.olive) {
   return g;
 }
 export function crater(radius, color = '#2b2f36') {
+  // Granattrichter: unregelmäßige dunkle Mulde mit flachem, aufgeworfenem Erdwall (kein Ring/Reifen)
   const g = new THREE.Group();
-  const d = disc(radius, color, 20); d.position.y = .02; g.add(d);
-  const rim = mesh(new THREE.TorusGeometry(radius, radius * .18, 6, 20), new THREE.Color(color).multiplyScalar(1.6)); rim.rotation.x = Math.PI / 2; rim.position.y = .05; rim.castShadow = false; g.add(rim);
+  const pts = []; for (let k = 0; k < 18; k++) { const a = k / 18 * Math.PI * 2, rr = radius * (.82 + .18 * Math.sin(a * 3 + radius * 7) * Math.cos(a * 2)); pts.push(new THREE.Vector2(Math.cos(a) * rr, Math.sin(a) * rr)); }
+  const pit = mesh(new THREE.ShapeGeometry(new THREE.Shape(pts)), color); pit.rotation.x = -Math.PI / 2; pit.position.y = .015; pit.castShadow = false; g.add(pit);
+  const prof = [[radius * .78, 0], [radius * .95, radius * .07], [radius * 1.08, radius * .09], [radius * 1.5, 0]].map(([x, y]) => new THREE.Vector2(x, y));
+  const berm = mesh(new THREE.LatheGeometry(prof, 22), new THREE.Color(color).lerp(new THREE.Color('#ffffff'), .25)); berm.castShadow = false; g.add(berm);
   return g;
 }
 export function palm(h = 4) {
