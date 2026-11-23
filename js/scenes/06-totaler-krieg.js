@@ -3,7 +3,7 @@ import * as H from '../common.js';
 const { P } = H;
 
 export default {
-  id: 'totaler-krieg', title: 'Totaler Krieg', seed: 16, duration: 7,
+  id: 'totaler-krieg', title: 'Totaler Krieg', seed: 16, duration: 7, rev: 2,
   script: 'Wenig später ruft die NS-Regierung den „totalen Krieg“ aus.',
   caption: { title: '„Totaler Krieg“', sub: 'Februar 1943' },
   params: {
@@ -11,14 +11,14 @@ export default {
     cols: { type: 'number', min: 4, max: 24, step: 1, value: 14, label: 'Figuren pro Reihe' },
     banners: { type: 'number', min: 0, max: 9, step: 1, value: 5, label: 'Banner' },
     bannerColor: { type: 'color', value: '#b4231c', label: 'Fahnenfarbe' },
-    slogan: { type: 'text', value: 'Totaler Krieg – kürzester Krieg', label: 'Spruchband' },
     speakerGlow: { type: 'boolean', value: true, label: 'Redner leuchtet rot' },
     crowdGlow: { type: 'boolean', value: true, label: 'Publikum als weiße Silhouetten' },
     wallColor: { type: 'color', value: '#55607a', label: 'Wand' },
     crowdColor: { type: 'color', value: '#5b5f6a', label: 'Publikum' },
     tRaise: { type: 'number', min: 0, max: 10, step: .1, value: 3.8, label: 'Arme hoch ab (s)' },
     spotIntensity: { type: 'number', min: 0, max: 600, step: 10, value: 220, label: 'Scheinwerfer' },
-    ...H.cameraParams([0, 2.6, 24], [0, 4, 15], [0, 3, -8], 42)
+    // Fokus auf den Redner: über die Köpfe des Publikums langsam auf das Pult zu
+    ...H.cameraParams([0, 4.6, 10], [0, 4.2, 5.2], [0, 3.6, -8.7], 30)
   },
   build({ scene, params: p, rng: r, shadows }) {
     // Berliner Sportpalast, 18. Februar 1943 (Stil wie Szene 1: blaugraue Halle, Low-Poly, Lichtkegel)
@@ -60,20 +60,21 @@ export default {
       for (let i = 0; i < 7; i++) { const col = H.box(.9, 24, .9, '#2c3340'); col.position.set(side * 22, 12, 8 - i * 6); scene.add(col); }
     }
     for (let i = 0; i < 6; i++) { const beam = H.box(46, .8, .8, '#2c3340'); beam.position.set(0, 22, 6 - i * 4.5); scene.add(beam); }
-    // Fahnen an der Rückwand und Spruchband über der Bühne
+    // Fahnen an der Rückwand
     for (let i = 0; i < p.banners; i++) {
       const x = (i - (p.banners - 1) / 2) * 6.2;
       const b = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 11), flagMat(256, 880, 330)); b.position.set(x, 11.3, -13.4); scene.add(b);
     }
-    const band = new THREE.Mesh(new THREE.PlaneGeometry(26, 1.6), new THREE.MeshLambertMaterial({ map: textTex(p.slogan.toUpperCase()), emissive: '#ffffff', emissiveMap: textTex(p.slogan.toUpperCase()), emissiveIntensity: .22 }));
-    band.position.set(0, 4.9, -13.3); scene.add(band);
+
     // Bühne, Rednerpult mit Hakenkreuz, Mikrofone
     const SH = 2.6;   // hohe Bühne, damit der Redner über dem Publikum steht
     const stage = H.box(22, SH, 6, '#3d4554'); stage.position.set(0, SH / 2, -9); scene.add(stage);
     const podium = H.box(1.5, .95, .8, '#3a2f28'); podium.position.set(0, SH + .475, -7.9); scene.add(podium);
-    const emblem = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1), new THREE.MeshLambertMaterial({ map: flagTex(256, 256, 128), emissive: '#ffffff', emissiveMap: flagTex(256, 256, 128), emissiveIntensity: .1 }));
+    const emblem = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1), new THREE.MeshBasicMaterial({ map: flagTex(256, 256, 128), color: '#a8a8a8' })   /* unbeleuchtet: strahlt im Verfolgerlicht nicht aus */);
     emblem.scale.setScalar(.7); emblem.position.set(0, SH + .5, -7.49); scene.add(emblem);
-    const speaker = H.figure({ color: '#1c1d22', head: P.skin, glow: p.speakerGlow ? H.ROLE.axis : null, strength: 1.6, scale: 1.25, model: 'suit', pose: 'Rallying_The_Crowd_To_Make_Them_Cheer', loopPose: true }); speaker.position.set(0, SH, -8.7); speaker.rotation.y = -Math.PI / 2; scene.add(speaker);
+    const speaker = H.figure({ color: '#1c1d22', head: P.skin, glow: p.speakerGlow ? H.ROLE.axis : null, strength: 1.25, scale: 1.25, model: 'suit', pose: 'Rallying_The_Crowd_To_Make_Them_Cheer', loopPose: true }); speaker.position.set(0, SH, -8.7); speaker.rotation.y = -Math.PI / 2; scene.add(speaker);
+    // eigener Verfolgerscheinwerfer auf den Redner, damit er sich klar von Fahnen und Wand abhebt
+    const follow = new THREE.SpotLight('#fff1d8', 260, 30, .16, .45, 1.2); follow.position.set(0, 12, 2); follow.target.position.set(0, SH + 1.4, -8.7); follow.castShadow = false; scene.add(follow, follow.target);
     const armL = speaker.userData.armL, armR = speaker.userData.armR;
     for (const x of [-.5, .5]) { const st = H.cyl(.02, .02, 1.1, P.black, 6); st.position.set(x, SH + 1.45, -7.6); scene.add(st); const mic = H.cyl(.05, .04, .18, P.black, 8); mic.position.set(x, SH + 2.0, -7.6); scene.add(mic); }
     // Scheinwerfer von den Galerien auf den Redner, sichtbare Lichtkegel
@@ -82,7 +83,7 @@ export default {
       sp.position.set(x, 17, 4); sp.target.position.set(0, SH + 1.2, -8.5); sp.castShadow = false;
       scene.add(sp, sp.target);
       const len = sp.position.distanceTo(sp.target.position);
-      const beam = new THREE.Mesh(new THREE.ConeGeometry(2.6, len, 18, 1, true), new THREE.MeshBasicMaterial({ color: '#fff2d6', transparent: true, opacity: .035, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
+      const beam = new THREE.Mesh(new THREE.ConeGeometry(2.6, len, 18, 1, true), new THREE.MeshBasicMaterial({ color: '#fff2d6', transparent: true, opacity: .022, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
       beam.geometry.translate(0, -len / 2, 0); beam.position.copy(sp.position);
       beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), sp.target.position.clone().sub(sp.position).normalize()); scene.add(beam);
     }
