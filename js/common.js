@@ -1514,30 +1514,31 @@ let EXPLOSION_SEED = 1;
 
 // Feuerball: Blitz, kantige Feuerbrocken (weißgelb -> rot), Flammenzungen, Rauchbrocken, die aufsteigen und
 // zusammenschrumpfen, Splitter als Trümmer, Funken und ein flacher Druckwellenring
-export function fireballLP(r, { size = 2.5, duration = 3.2, debris = 60, sparks = 120, ring = true } = {}) {
+export function fireballLP(r, { size = 2.5, duration = 3.2, debris = 60, sparks = 120, ring = true, variant = 0 } = {}) {
+  const V = variant * 200;   // andere Brocken-Formen je Variante, damit Explosionen nicht gleich aussehen
   const g = new THREE.Group();
   const fireEnd = duration * .45;
   const flash = lpMesh(lpGeometry('ico', 2), lpFireMat()); g.add(flash);
   const fire = [];
   for (let i = 0; i < 11; i++) {
-    const m = lpMesh(lpGeometry('ico', 20 + i, { jitter: .32, shade: [.5, 1] }), lpFireMat()); g.add(m);
+    const m = lpMesh(lpGeometry('ico', 20 + i + V, { jitter: .32, shade: [.5, 1] }), lpFireMat()); g.add(m);
     const a = r() * 6.283, e = r() * 1.3 - .2;
     fire.push({ hue: (r() - .35) * .3, m, d: new THREE.Vector3(Math.cos(a) * Math.cos(e), Math.sin(e) * .8 + .25, Math.sin(a) * Math.cos(e)), k: .28 + r() * .32, reach: .35 + r() * .55, delay: r() * .12, rot: [r() * 6, r() * 6, r() * 6], spin: (r() - .5) * 3 });
   }
   const tongues = [];
   for (let i = 0; i < 6; i++) {
-    const m = lpMesh(lpGeometry('cone', 40 + i, { jitter: .25 }), lpFireMat()); g.add(m);
+    const m = lpMesh(lpGeometry('cone', 40 + i + V, { jitter: .25 }), lpFireMat()); g.add(m);
     tongues.push({ m, d: new THREE.Vector3((r() - .5) * .9, 1, (r() - .5) * .9).normalize(), delay: .03 + r() * .2, len: 1.4 + r() * 1.2, w: .14 + r() * .12, rotY: r() * 6 });
   }
   const smoke = [];
   for (let i = 0; i < 12; i++) {
-    const m = lpMesh(lpGeometry('ico', 60 + i, { detail: i % 3 === 0 ? 1 : 0, jitter: .26, shade: [.45, 1] }), lpSmokeMat('#5a5550')); g.add(m);
+    const m = lpMesh(lpGeometry('ico', 60 + i + V, { detail: i % 3 === 0 ? 1 : 0, jitter: .26, shade: [.45, 1] }), lpSmokeMat('#5a5550')); g.add(m);
     const a = r() * 6.283;
     smoke.push({ m, dx: Math.cos(a) * (.2 + r() * .7), dz: Math.sin(a) * (.2 + r() * .7), delay: .12 + r() * .5, k: .2 + r() * .24, rise: .9 + r() * .9, rot: [r() * 6, r() * 6, r() * 6] });
   }
   const shards = [];
   for (let i = 0; i < Math.min(28, Math.round(debris * .4)); i++) {
-    const m = lpMesh(lpGeometry('tet', 80 + i, { jitter: .35 }), lpSmokeMat('#2a2624')); g.add(m);
+    const m = lpMesh(lpGeometry('tet', 80 + i + V, { jitter: .35 }), lpSmokeMat('#2a2624')); g.add(m);
     const a = r() * 6.283, e = .35 + r() * 1.0, sp = size * (2.2 + r() * 3.5);
     shards.push({ m, v: [Math.cos(a) * Math.cos(e) * sp, Math.sin(e) * sp, Math.sin(a) * Math.cos(e) * sp], s: size * (.04 + r() * .06), spin: [r() * 9, r() * 9, r() * 9], ttl: 1.2 + r() * 1.2 });
   }

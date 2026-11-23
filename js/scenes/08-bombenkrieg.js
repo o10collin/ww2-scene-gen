@@ -7,7 +7,7 @@ const { P } = H;
 // einschlagen, wo danach Feuerball, Brand und aufsteigender Rauch stehen. Suchscheinwerfer tasten den Himmel ab,
 // Flakwolken platzen in Höhe der Bomber. Kamera niedrig über den Dächern.
 export default {
-  id: 'bombenkrieg', title: 'Bombenkrieg', seed: 18, duration: 10,
+  id: 'bombenkrieg', title: 'Bombenkrieg', seed: 18, duration: 10, rev: 2,
   script: 'Auf Seiten der Alliierten wird daraufhin auch eskaliert. Sie fangen damit an, deutsche Städte und Industrieanlagen zu bombardieren.',
   caption: { title: 'Luftkrieg gegen deutsche Städte', sub: '1943' },
   params: {
@@ -21,6 +21,7 @@ export default {
     litWindows: { type: 'number', min: 0, max: 1, step: .05, value: .2, label: 'Erleuchtete Fenster (Verdunkelung)' },
     skyColor: { type: 'color', value: '#101722', label: 'Nachthimmel' },
     bomberGlow: { type: 'color', value: '#2f7cff', label: 'Bomber (Rollenfarbe)' },
+    bombColor: { type: 'color', value: '#ff8a1e', label: 'Bomben (leuchtend wie Szene 1)' },
     ...H.cameraParams([-40, 16, 40], [-28, 14, 32], [2, 9, -12], 40)
   },
   build({ scene, params: p, rng: r, shadows }) {
@@ -40,11 +41,13 @@ export default {
     // Bomberverband: Keilformation, fliegt in +X; Bomben werden über der Stadt ausgeklinkt
     const g = 9.81, fallT = Math.sqrt(2 * p.altitude / g);
     const bombers = [], bombs = [];
-    const bomberMat = H.glowMat(p.bomberGlow, 1.6);
     for (let i = 0; i < p.bombers; i++) {
       const row = Math.ceil(i / 2), side = i % 2 ? 1 : -1;
-      const m = H.faceZ(H.aircraft(bomberMat, { span: 7, length: 5, engines: 4 })); scene.add(m);
-      const b = { m, z: side * row * 5.5 - 12 + (r() - .5), lag: row * 6, y: p.altitude + row * .8 + r() };
+      // jede Maschine etwas anders: zwei- oder viermotorig, Spannweite, Rumpflänge, Farbton, leichtes Schaukeln
+      const tint = new THREE.Color(p.bomberGlow).offsetHSL((r() - .5) * .04, (r() - .5) * .2, (r() - .5) * .14);
+      const four = r() < .65, span = four ? 6.6 + r() * 1.6 : 5.2 + r() * 1.0;
+      const m = H.faceZ(H.aircraft(H.glowMat(tint, 1.45 + r() * .35), { span, length: span * (.66 + r() * .1), engines: four ? 4 : 2 })); scene.add(m);
+      const b = { m, ph: r() * 6, roll: .04 + r() * .05, z: side * row * 5.5 - 12 + (r() - .5), lag: row * 6, y: p.altitude + row * .8 + r() };
       bombers.push(b);
       const x0 = -44 - b.lag;                               // Startposition, x(t) = x0 + v t
       for (let k = 0; k < p.bombsPer; k++) {
@@ -52,8 +55,9 @@ export default {
         const tRel = (xRel - x0) / p.speed;
         const ft = Math.sqrt(2 * b.y / g);
         const ix = xRel + p.speed * ft, iz = b.z + (r() - .5) * 1.2;
-        const model = H.bomb(1.2, '#23262b', .17); model.visible = false; scene.add(model);
-        const boom = H.fireball(r, { size: 3.6, duration: 2.6, debris: 30, sparks: 60, ring: true }); boom.position.set(ix, 0, iz); scene.add(boom);
+        const model = H.bomb(1.6, H.glowMat(p.bombColor, 1.25), .2); model.visible = false; scene.add(model);
+        const boom = H.fireball(r, { size: 2.6 + r() * 2.2, duration: 2.0 + r() * 1.2, debris: 20 + Math.floor(r() * 25), sparks: 40 + Math.floor(r() * 50), ring: r() < .6, variant: bombs.length % 5 });
+        boom.position.set(ix, 0, iz); boom.rotation.y = r() * 6.28; boom.scale.set(1, .85 + r() * .35, 1); scene.add(boom);
         const fire = H.flame(r, { size: 1.8 + r() * .8 }); fire.position.set(ix, 0, iz); fire.visible = false; scene.add(fire);
         const smoke = H.smokeColumn(r, { height: 18, width: 2.2, color: '#4a4542' });
         const glow = new THREE.PointLight('#ff8a3a', 0, 22, 1.6); glow.position.set(ix, 3, iz); scene.add(glow); smoke.position.set(ix, 1, iz); smoke.visible = false; scene.add(smoke);
@@ -78,7 +82,7 @@ export default {
 
     return {
       update(t, p) {
-        for (const b of bombers) b.m.position.set(-44 - b.lag + t * p.speed, b.y, b.z);
+        for (const b of bombers) { b.m.position.set(-44 - b.lag + t * p.speed, b.y + Math.sin(t * .9 + b.ph) * .25, b.z); b.m.rotation.x = Math.sin(t * .7 + b.ph) * b.roll; }
         for (const bm of bombs) {
           const age = t - bm.tRel;
           bm.model.visible = age >= 0 && age < bm.ft;
