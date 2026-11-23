@@ -31,14 +31,14 @@ export default {
     for (const z of [-7, -6, -5]) { const b = H.cyl(.18, .2, 7, P.darkGrey, 8); b.rotation.z = -Math.PI / 2 + .15; b.position.set(13, 1.6, z); scene.add(b); }
     for (let i = 0; i < 14; i++) { const post = H.cyl(.04, .04, 1, P.darkGrey, 6); post.position.set(-19 + i * 3, .5, 5.9); scene.add(post); }
     const rail = H.cyl(.03, .03, 40, P.darkGrey, 6); rail.rotation.z = Math.PI / 2; rail.position.set(0, 1, 5.9); scene.add(rail);
-    const fl = H.flag([P.red, P.white, P.blue], { pole: 5, w: 1.6, h: 1 }); fl.position.set(-5, 11, -8); scene.add(fl);
+    const fl = H.nationalFlag('usa', { pole: 5, w: 1.9, h: 1.0, hang: false, base: false }); fl.position.set(-5, 11, -8); scene.add(fl);   // wehende US-Flagge am Mast
     // Tisch mit Dokument
     const tbl = H.table(3, 1.2, .8, '#4a3f36'); tbl.position.set(0, 0, 0); scene.add(tbl);
     const cloth = H.box(3.1, .03, 1.25, '#3e5a3a'); cloth.position.set(0, .85, 0); scene.add(cloth);
     const pap = H.paper(.7, .9); pap.position.set(0, .88, .1); scene.add(pap);
     const sig = H.signing(pap, P.black);
     const signer = H.figure({ color: '#2a2b30', glow: H.ROLE.axis, model: 'suit', pose: 'Male_Writing_While_Seated', seed: 9 }); signer.position.set(0, 0, 1.1); signer.rotation.y = Math.PI / 2; scene.add(signer);
-    const sChair = new THREE.Group(); const sSeat = H.box(.55, .08, .55, '#3a2e26'); sSeat.position.y = .5; const sBack = H.box(.55, .7, .06, '#3a2e26'); sBack.position.set(0, .9, .25); sChair.add(sSeat, sBack); sChair.position.set(0, 0, 1.35); scene.add(sChair);
+    const sChair = H.chair(); sChair.rotation.y = Math.PI; sChair.position.set(0, 0, 1.3); scene.add(sChair);
     const armL = signer.userData.armL, armR = signer.userData.armR;
     const officers = ['#6b6f58', '#f0efe8', '#6b6f58', '#f0efe8', '#4a4f44'];
     officers.forEach((c, i) => { const f = H.figure({ color: c, glow: H.ROLE.west, model: i % 2 ? 'suit' : 'soldier', seed: i + 21, pose: i === 1 ? 'Formal_Military_Salute' : null }); f.position.set(-2.4 + i * 1.2, 0, -1.2); f.rotation.y = -Math.PI / 2; scene.add(f); });
@@ -57,7 +57,7 @@ export default {
 
     return {
       update(t, p) {
-        water.userData.at(t);
+        water.userData.at(t); fl.userData.at(t);
         const u = H.span(t, p.tSign, p.tSign + p.signDur);
         sig.at(u);
         const writing = u > 0 && u < 1;

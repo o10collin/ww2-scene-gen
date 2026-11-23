@@ -1838,6 +1838,74 @@ export function flag(colors = [P.red], { w = 1.6, h = 1.0, pole = 3 } = {}) {
   return g;
 }
 
+// ---------- Nationalflaggen (Stand 1945) als Tuch mit Faltenwurf an Fahnenstange mit Spitze und Standfuß ----------
+const FLAG_TEX = {};
+function flagTexture(kind) {
+  if (FLAG_TEX[kind]) return FLAG_TEX[kind];
+  const W = 760, Hh = 400, c = document.createElement('canvas'); c.width = W; c.height = Hh; const g = c.getContext('2d');
+  const star = (x, y, r, col) => { g.fillStyle = col; g.beginPath(); for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + k * Math.PI / 5, rr = k % 2 ? r * .4 : r; g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } g.fill(); };
+  if (kind === 'usa') {                                                        // 13 Streifen, 48 Sterne (6 × 8)
+    for (let i = 0; i < 13; i++) { g.fillStyle = i % 2 ? '#ffffff' : '#b22234'; g.fillRect(0, i * Hh / 13, W, Hh / 13 + 1); }
+    const cw = W * .4, ch = Hh * 7 / 13; g.fillStyle = '#3c3b6e'; g.fillRect(0, 0, cw, ch);
+    for (let rI = 0; rI < 6; rI++) for (let k = 0; k < 8; k++) star(cw * (k + .5) / 8, ch * (rI + .5) / 6, 9, '#ffffff');
+  } else if (kind === 'uk') {                                                  // Union Jack
+    g.fillStyle = '#012169'; g.fillRect(0, 0, W, Hh);
+    g.strokeStyle = '#ffffff'; g.lineWidth = Hh * .2; g.beginPath(); g.moveTo(0, 0); g.lineTo(W, Hh); g.moveTo(W, 0); g.lineTo(0, Hh); g.stroke();
+    g.strokeStyle = '#c8102e'; g.lineWidth = Hh * .067; g.beginPath(); g.moveTo(0, 0); g.lineTo(W, Hh); g.moveTo(W, 0); g.lineTo(0, Hh); g.stroke();
+    g.fillStyle = '#ffffff'; g.fillRect(W / 2 - Hh * .17, 0, Hh * .34, Hh); g.fillRect(0, Hh / 2 - Hh * .17, W, Hh * .34);
+    g.fillStyle = '#c8102e'; g.fillRect(W / 2 - Hh * .1, 0, Hh * .2, Hh); g.fillRect(0, Hh / 2 - Hh * .1, W, Hh * .2);
+  } else if (kind === 'ussr') {                                                // Rot, goldener Stern mit Hammer und Sichel
+    g.fillStyle = '#cc0000'; g.fillRect(0, 0, W, Hh);
+    star(Hh * .25, Hh * .12, Hh * .055, '#ffd700');
+    g.strokeStyle = '#ffd700'; g.lineWidth = Hh * .03; g.lineCap = 'round';
+    g.beginPath(); g.arc(Hh * .24, Hh * .29, Hh * .085, Math.PI * .1, Math.PI * 1.25); g.stroke();   // Sichel
+    g.beginPath(); g.moveTo(Hh * .17, Hh * .38); g.lineTo(Hh * .31, Hh * .22); g.stroke();             // Hammerstiel
+    g.lineWidth = Hh * .045; g.beginPath(); g.moveTo(Hh * .27, Hh * .19); g.lineTo(Hh * .34, Hh * .26); g.stroke();   // Hammerkopf
+  } else if (kind === 'france') {
+    for (const [i, col] of ['#002395', '#ffffff', '#ed2939'].entries()) { g.fillStyle = col; g.fillRect(i * W / 3, 0, W / 3 + 1, Hh); }
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; FLAG_TEX[kind] = t; return t;
+}
+export function nationalFlag(kind, { w = 1.5, h = .8, pole = 3.0, hang = true, base = true } = {}) {
+  const g = new THREE.Group();
+  const brass = new THREE.MeshStandardMaterial({ color: '#c9a24a', metalness: .7, roughness: .35 });
+  const wood = new THREE.MeshLambertMaterial({ color: '#3a2a1e' });
+  const stick = new THREE.Mesh(new THREE.CylinderGeometry(.025, .03, pole, 10), wood); stick.position.y = pole / 2; stick.castShadow = true; g.add(stick);
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(.05, .18, 8), brass); tip.position.y = pole + .12; g.add(tip);
+  const knob = new THREE.Mesh(new THREE.SphereGeometry(.045, 10, 8), brass); knob.position.y = pole + .02; g.add(knob);
+  if (base) { const foot = new THREE.Mesh(new THREE.CylinderGeometry(.18, .24, .08, 14), brass); foot.position.y = .04; g.add(foot); }
+  // Tuch: hängend (Innenraum) mit senkrechten Falten, oder wehend; Ränder am Stab befestigt
+  const geo = new THREE.PlaneGeometry(w, h, 24, 10); geo.translate(w / 2 + .03, 0, 0);
+  const pos = geo.attributes.position, base0 = Float32Array.from(pos.array);
+  const cloth = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: flagTexture(kind), side: THREE.DoubleSide, roughness: .85 }));
+  cloth.position.y = pole - h / 2 - .06; cloth.castShadow = true; g.add(cloth);
+  g.userData.at = t => {
+    for (let i = 0; i < pos.count; i++) {
+      const x = base0[i * 3], y = base0[i * 3 + 1], u = (x - .03) / w;                     // 0 am Stab, 1 am freien Ende
+      if (hang) {                                                                         // hängt in Falten nach unten, leicht schwingend
+        pos.setX(i, x * (1 - .18 * u)); pos.setZ(i, Math.sin(u * 9 + Math.sin(t * .8) * .3) * .06 * u + Math.sin(u * 3.1) * .04);
+        pos.setY(i, y - u * u * h * .18 * (.6 + .4 * (y / h + .5)));
+      } else { pos.setZ(i, Math.sin(u * 6 - t * 4) * .12 * u + Math.sin(u * 11 - t * 6.3 + y * 3) * .03 * u); pos.setY(i, y - u * .05); }
+    }
+    pos.needsUpdate = true; geo.computeVertexNormals();
+  };
+  g.userData.at(0);
+  return g;
+}
+// Stuhl (Holz, gepolsterte Sitzfläche): leicht konische Beine, Zarge, Rückenlehne mit zwei Pfosten, Kopfholm und Sprossen.
+// Sitzhöhe ~.48, Lehne zeigt nach -Z (Sitzende schauen nach +Z)
+export function chair(color = '#4a3526', cushion = '#5a3d3d') {
+  const g = new THREE.Group(), wood = new THREE.MeshLambertMaterial({ color }), pad = new THREE.MeshLambertMaterial({ color: cushion });
+  const add = (geo, m, x, y, z) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.castShadow = true; o.receiveShadow = true; g.add(o); return o; };
+  for (const [x, z] of [[-.21, -.2], [.21, -.2], [-.21, .2], [.21, .2]]) add(new THREE.CylinderGeometry(.018, .024, .44, 8), wood, x, .22, z);
+  add(new THREE.BoxGeometry(.48, .05, .46), wood, 0, .44, 0);                             // Zarge
+  const seat = add(new THREE.BoxGeometry(.46, .05, .44), pad, 0, .485, .01); seat.scale.y = 1;   // Polster
+  for (const x of [-.21, .21]) add(new THREE.BoxGeometry(.035, .5, .035), wood, x, .72, -.21);   // Lehnenpfosten
+  add(new THREE.BoxGeometry(.5, .07, .04), wood, 0, .96, -.215);                           // Kopfholm (leicht geschwungen wirkt durch Schatten)
+  for (const x of [-.08, 0, .08]) add(new THREE.BoxGeometry(.03, .4, .02), wood, x, .73, -.215);   // Sprossen
+  for (const z of [-.2, .2]) add(new THREE.BoxGeometry(.42, .02, .02), wood, 0, .12, z);   // Querstreben
+  return g;
+}
 export function table(w = 4, d = 1.4, h = .8, color = P.brown) {
   const g = new THREE.Group();
   const top = box(w, .08, d, color); top.position.y = h;
@@ -1990,7 +2058,7 @@ export function signing(paperMesh, penColor = P.black) {
       const li = Math.min(n - 1, Math.floor(k)), f = k - li;
       const w = lines[0].geometry.parameters.width;
       pen.position.set(-w / 2 + f * w - .05, .25, lines[li].position.z);
-      pen.visible = u > 0 && u < 1.02;
+      pen.visible = false;   // kein schwebender Stift (die Schrift erscheint unter der Hand)
     }
   };
 }

@@ -3,7 +3,7 @@ import * as H from '../common.js';
 const { P } = H;
 
 export default {
-  id: 'kapitulation-europa', title: 'Kapitulation Deutschlands', seed: 23, duration: 8,
+  id: 'kapitulation-europa', title: 'Kapitulation Deutschlands', seed: 23, duration: 8, rev: 2,
   script: 'Am 8. Mai kapituliert Deutschland und setzt dem Zweiten Weltkrieg in Europa ein Ende.',
   caption: { title: 'Kriegsende in Europa', sub: '8. Mai 1945' },
   params: {
@@ -36,19 +36,18 @@ export default {
     }
     // Unterzeichnender vor dem Tisch
     const signer = H.figure({ color: '#555a63', glow: H.ROLE.axis, model: 'soldier', pose: 'Male_Writing_While_Seated', seed: 7 }); signer.position.set(0, 0, 1.2); signer.rotation.y = Math.PI / 2; scene.add(signer);
-    const sChair = new THREE.Group(); const sSeat = H.box(.55, .08, .55, '#3a2e26'); sSeat.position.y = .5; const sBack = H.box(.55, .7, .06, '#3a2e26'); sBack.position.set(0, .9, .25); sChair.add(sSeat, sBack); sChair.position.set(0, 0, 1.45); scene.add(sChair);
+    const sChair = H.chair(); sChair.rotation.y = Math.PI; sChair.position.set(0, 0, 1.4); scene.add(sChair);
     const armL = signer.userData.armL, armR = signer.userData.armR;
-    if (p.flags) {
-      const sets = [[P.blue, P.white, P.red], [P.red, P.white, P.blue], [P.red, P.red], [P.blue, P.white, P.red]];
-      sets.forEach((c, i) => { const f = H.flag(c, { pole: 3.2, w: 1.2, h: .8 }); f.position.set(-4.5 + i * 3, 0, -4.5); f.rotation.y = -.2; scene.add(f); });
-    }
-    for (let i = 0; i < 5; i++) { const ch = new THREE.Group(); const seat = H.box(.55, .08, .55, '#3a2e26'); seat.position.y = .5; const back = H.box(.55, .7, .06, '#3a2e26'); back.position.set(0, .9, -.25); ch.add(seat, back); ch.position.set(-2.6 + i * 1.3, 0, -1.9); scene.add(ch); }
+    // Flaggen der vier Siegermächte an Fahnenstangen mit Standfuß vor der Rückwand (hängendes Tuch, leicht bewegt)
+    const flags = [];
+    if (p.flags) ['usa', 'uk', 'ussr', 'france'].forEach((k, i) => { const f = H.nationalFlag(k, { w: 1.3, h: .8, pole: 3.1 }); f.position.set(-1.0 + i * 1.9, 0, -5.3); f.rotation.y = .12; scene.add(f); flags.push(f); });
+    for (let i = 0; i < 5; i++) { const ch = H.chair(); ch.position.set(-2.6 + i * 1.3, 0, -1.85); scene.add(ch); }
     for (const x of [-1.4, 1.4]) { const st = H.cyl(.015, .015, .4, P.black, 6); st.position.set(x, 1.05, -.3); scene.add(st); const mic = H.cyl(.04, .03, .12, P.black, 8); mic.position.set(x, 1.3, -.3); scene.add(mic); }
     const carpet = H.box(10, .03, 7, '#3b2a2a'); carpet.position.set(0, .02, 0); carpet.receiveShadow = true; scene.add(carpet);
     for (let i = 0; i < 4; i++) { const f = H.paper(.5, .7); f.position.set(-2.4 + i * 1.5, .88, -.5); f.rotation.y = (r() - .5) * .5; scene.add(f); }
-    const lampStand = H.cyl(.04, .06, 1.8, '#2a2a2a', 8); lampStand.position.set(4.2, .9, -1); scene.add(lampStand);
-    const lampShade = H.cone(.45, .5, '#4a3a2a', 12); lampShade.rotation.x = Math.PI; lampShade.position.set(4.2, 2.0, -1); scene.add(lampShade);
-    const standLight = new THREE.PointLight('#ffe0b0', 8, 8, 1.6); standLight.position.set(4.2, 1.7, -1); scene.add(standLight);
+    const lampStand = H.cyl(.04, .06, 1.8, '#2a2a2a', 8); lampStand.position.set(5.0, .9, -1); scene.add(lampStand);
+    const lampShade = H.cone(.45, .5, '#4a3a2a', 12); lampShade.rotation.x = Math.PI; lampShade.position.set(5.0, 2.0, -1); scene.add(lampShade);
+    const standLight = new THREE.PointLight('#ffe0b0', 8, 8, 1.6); standLight.position.set(5.0, 1.7, -1); scene.add(standLight);
 
     return {
       update(t, p) {
@@ -59,6 +58,7 @@ export default {
         armL.rotation.z = writing ? -.9 : -.1;
         signer.rotation.x = writing ? .18 : 0;
         lampLight.intensity = 30 + Math.sin(t * 9) * .6;
+        for (const f of flags) f.userData.at(t);
       }
     };
   }
