@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import * as H from '../common.js';
 import { hiMap, mercY, regionMaskTexture } from '../map-hi.js';
-import { REICH_1942, USSR_1943, GROUPS_1943 } from '../history.js';
+import { REICH_1942, USSR_1943, GG_1943, GROUPS_1943 } from '../history.js';
 
 // Kriegswende an der Ostfront (Stil wie Szene 3): Nach Stalingrad drängt die Rote Armee die Front von der Wolga
 // bis an den Donez zurück (Nov. 1942 -> März 1943). Das von Deutschland besetzte sowjetische Gebiet (rot getönt)
@@ -13,12 +13,14 @@ import { REICH_1942, USSR_1943, GROUPS_1943 } from '../history.js';
 const LATS = [60, 58, 56, 54, 53, 52.1, 51.4, 50.6, 49.2, 47.6, 46.5, 45.3, 44];
 const FRONT_A = [30.3, 31.6, 33.6, 35.0, 36.3, 37.6, 39.0, 39.6, 42.0, 44.4, 44.2, 44.4, 43.8];
 const FRONT_B = [30.3, 31.4, 31.9, 34.2, 36.0, 34.6, 34.9, 36.4, 37.3, 38.9, 38.6, 37.6, 37.8];
-const SOVIET_LAND = USSR_1943;   // Sowjetunion in den Grenzen von 1941
-const BBOX = [21, 40, 50, 60.02];   // oben genau an der Front bei Leningrad
+// Deutsch besetztes Gebiet hinter der Front: Generalgouvernement und die besetzten Teile der Sowjetunion (Grenzen
+// von 1941) -> lückenlos von der Reichsgrenze bis an die Front
+const OCC_LAND = [...GG_1943, ...USSR_1943];
+const BBOX = [14, 40, 50, 60.02];   // oben genau an der Front bei Leningrad
 const ARROWS = [[57, 0], [53.6, .25], [50.9, .1], [47.6, .35]];                 // [Breite, Startverzögerung]
 
 export default {
-  id: 'kriegswende', title: 'Kriegswende', seed: 15, duration: 8, rev: 2,
+  id: 'kriegswende', title: 'Kriegswende', seed: 15, duration: 8, rev: 3,
   script: 'Die Rote Armee drängt die deutschen Truppen zurück. Dies wird oft als Kriegswende bezeichnet.',
   caption: { title: 'Ostfront', sub: 'Februar 1943' },
   params: {
@@ -57,7 +59,7 @@ export default {
     const a = U.project(BBOX[0], BBOX[1]), b = U.project(BBOX[2], BBOX[3]);
     const occMat = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false,
-      uniforms: { mask: { value: regionMaskTexture(SOVIET_LAND, BBOX, 3072) }, col: { value: new THREE.Color(p.occupiedColor) }, u: { value: 0 },
+      uniforms: { mask: { value: regionMaskTexture(OCC_LAND, BBOX, 4096) }, col: { value: new THREE.Color(p.occupiedColor) }, u: { value: 0 },
         lats: { value: LATS }, fa: { value: FRONT_A }, fb: { value: FRONT_B }, bb: { value: new THREE.Vector4(BBOX[0], mercY(BBOX[1]), BBOX[2], mercY(BBOX[3])) } },
       vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
       fragmentShader: `

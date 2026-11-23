@@ -5,7 +5,7 @@ import { REICH_1942, GROUPS_1943 } from '../history.js';
 
 // Vormarsch auf Berlin (Stil wie Szene 3 und 5): Das Reich ist rot. Von Westen schiebt sich die Front vom Rhein bis
 // an die Elbe (März → Ende April 1945), von Osten von Oder und Neiße bis Berlin. Erobertes Gebiet wird blau bzw.
-// ocker eingefärbt, flache Kartenpfeile schieben die Fronten. Bei Torgau treffen sich beide Seiten an der Elbe,
+// ocker eingefärbt (dunklerer Ton mit Schraffur), die Fronten leuchten als Saum, flache Kartenpfeile schieben sie. Bei Torgau treffen sich beide Seiten an der Elbe,
 // dann fällt Berlin. Frontverläufe vereinfacht.
 const LATS = [55, 54.5, 53.5, 52.5, 51.5, 50.5, 49.5, 48.5, 47.3];
 const WEST_A = [6.9, 6.9, 6.9, 6.5, 6.0, 6.3, 6.8, 7.6, 7.6];        // Anfang März 1945: Rhein, Westwall
@@ -19,7 +19,7 @@ const lerpFront = (A, B, lat, u) => {
 };
 
 export default {
-  id: 'zangenangriff', title: 'Vormarsch auf Berlin', seed: 21, duration: 11, rev: 2,
+  id: 'zangenangriff', title: 'Vormarsch auf Berlin', seed: 21, duration: 11, rev: 3,
   script: 'Während sie 1945 von Westen immer weiter in Richtung Deutschland vorrücken, nähern sich aus dem Osten auch sowjetische Truppen, welche daraufhin Berlin einnehmen.',
   caption: { title: 'Berlin', sub: 'April 1945' },
   params: {
@@ -59,11 +59,11 @@ export default {
       transparent: true, depthWrite: false,
       uniforms: { mask: { value: regionMaskTexture(REICH_1942, BB, 3072) }, uw: { value: 0 }, ue: { value: 0 }, lats: { value: LATS },
         wa: { value: WEST_A }, wb: { value: WEST_B }, ea: { value: EAST_A }, eb: { value: EAST_B },
-        cw: { value: new THREE.Color(H.ROLE.west).multiplyScalar(1.05) }, ce: { value: new THREE.Color(H.ROLE.soviet).multiplyScalar(1.0) },
+        cw: { value: new THREE.Color(H.ROLE.west).multiplyScalar(.5) }, ce: { value: new THREE.Color(H.ROLE.soviet).multiplyScalar(.46) }, cf: { value: new THREE.Color('#ffe2a8').multiplyScalar(1.7) },
         bb: { value: new THREE.Vector4(BB[0], mercY(BB[1]), BB[2], mercY(BB[3])) } },
       vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
       fragmentShader: `
-        uniform sampler2D mask; uniform float uw, ue; uniform float lats[9], wa[9], wb[9], ea[9], eb[9]; uniform vec3 cw, ce; uniform vec4 bb;
+        uniform sampler2D mask; uniform float uw, ue; uniform float lats[9], wa[9], wb[9], ea[9], eb[9]; uniform vec3 cw, ce, cf; uniform vec4 bb;
         varying vec2 vUv;
         float front(float lat, float A[9], float B[9], float u) {
           float f = mix(A[0], B[0], u);
@@ -75,33 +75,32 @@ export default {
           float lon = mix(bb.x, bb.z, vUv.x), my = mix(bb.y, bb.w, vUv.y);
           float lat = degrees(2. * atan(exp(radians(my))) - 1.5707963);
           float m = texture2D(mask, vUv).a;
-          float w = smoothstep(.06, -.06, lon - front(lat, wa, wb, uw));
-          float e = smoothstep(-.06, .06, lon - front(lat, ea, eb, ue));
-          vec3 col = w > e ? cw : ce;
-          gl_FragColor = vec4(col, max(w, e) * m * .9);
+          float dw = lon - front(lat, wa, wb, uw), de = lon - front(lat, ea, eb, ue);
+          float w = smoothstep(.04, -.04, dw), e = smoothstep(-.04, .04, de);
+          // erobertes Gebiet: dunklerer Ton der Rollenfarbe mit feiner Schraffur (die Pfeile bleiben hell davor)
+          float hatch = step(.5, fract((gl_FragCoord.x + gl_FragCoord.y) / 14.));
+          vec3 col = (w > e ? cw : ce) * (1. + hatch * .18);
+          float a = max(w, e);                                  // deckt das Rot vollständig ab (kein Mischton)
+          // Frontlinien: leuchtender Saum genau an der Front, nur innerhalb des Reichsgebiets
+          float lw = 1. - smoothstep(.035, .085, abs(dw)), le = 1. - smoothstep(.035, .085, abs(de));
+          float l = max(lw * step(.001, uw + .001), le);
+          col = mix(col, cf, l); a = max(a, l);
+          gl_FragColor = vec4(col, a * m);
         }`
     });
     const occM = new THREE.Mesh(new THREE.PlaneGeometry(b.x - a.x, a.z - b.z), occ);
     occM.rotation.x = -Math.PI / 2; occM.position.set((a.x + b.x) / 2, .03, (a.z + b.z) / 2); occM.renderOrder = 3; map.add(occM);
 
-    // Frontlinien als leuchtende Röhren (nur über Mitteleuropa), jedes Bild neu
-    const lineMat = H.glowMat('#ffe2a8', 1.5);
-    let lines = [];
-    const buildLines = (uw, ue) => {
-      for (const l of lines) { map.remove(l); l.geometry.dispose(); }
-      lines = [[WEST_A, WEST_B, uw], [EAST_A, EAST_B, ue]].map(([A, B, u]) => {
-        const pts = []; for (let lat = A === WEST_A ? 53.6 : 54.4; lat >= 47.4; lat -= .25) pts.push(U.project(lerpFront(A, B, lat, u), lat, .07));
-        const m = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 90, .045, 5, false), lineMat); m.renderOrder = 4; map.add(m); return m;
-      });
-    };
-
-    // Kartenpfeile: Start außerhalb des Bildes, Spitze immer an der Front
-    const AW = [[53.0, 0], [51.0, .3], [49.0, .15]], AE = [[53.4, 0], [52.3, .2], [50.6, .35]];
-    const arrows = [
-      ...AW.map(([lat, d]) => ({ side: 'w', lat, d, a: U.flatArrow([[-4, lat], [H.lerp(-4, WEST_B[4] - .4, .5), lat + .4], [lerpFront(WEST_A, WEST_B, lat, 1) - .35, lat]], H.ROLE.west, { width: .42 * p.arrowSize, head: 1.0 * p.arrowSize, headW: 1.05 * p.arrowSize }) })),
-      ...AE.map(([lat, d]) => ({ side: 'e', lat, d, a: U.flatArrow([[27, lat], [H.lerp(27, EAST_B[3] + .4, .5), lat + .4], [lerpFront(EAST_A, EAST_B, lat, 1) + .35, lat]], H.ROLE.soviet, { width: .42 * p.arrowSize, head: 1.0 * p.arrowSize, headW: 1.05 * p.arrowSize }) }))
-    ];
-    for (const ar of arrows) { ar.lon0 = ar.side === 'w' ? -4 : 27; ar.lon1 = lerpFront(...(ar.side === 'w' ? [WEST_A, WEST_B] : [EAST_A, EAST_B]), ar.lat, 1) + (ar.side === 'w' ? -.35 : .35); }
+    // Kartenpfeile: setzen kurz hinter der Ausgangsfront an und wachsen mit der Front, die Spitze sitzt immer an der
+    // Frontlinie (hell vor dem dunkleren eroberten Gebiet)
+    const AW = [[53.0, 0], [51.0, .3], [49.0, .15]], AE = [[53.8, 0], [51.95, .2], [50.6, .35]];   // oberer Pfeil nördlich der Berlin-Beschriftung
+    const arrows = [...AW.map(([lat, d]) => ({ side: 'w', lat, d })), ...AE.map(([lat, d]) => ({ side: 'e', lat, d }))].map(ar => {
+      const [A, B] = ar.side === 'w' ? [WEST_A, WEST_B] : [EAST_A, EAST_B], sg = ar.side === 'w' ? -1 : 1;
+      const lon0 = lerpFront(A, B, ar.lat, 0) + sg * 2.4, lon1 = lerpFront(A, B, ar.lat, 1) + sg * .3;   // Schaft beginnt 2,4° hinter der Ausgangsfront
+      const pts = [[lon0, ar.lat - .15], [(lon0 + lon1) / 2, ar.lat + .25], [lon1, ar.lat]];
+      const a = U.flatArrow(pts, ar.side === 'w' ? H.ROLE.west : H.ROLE.soviet, { width: .46 * p.arrowSize, head: .95 * p.arrowSize, headW: 1.05 * p.arrowSize, strength: 1.6, opacity: 1 });
+      return { ...ar, A, B, sg, lon0, lon1, a };
+    });
 
     // Beschriftung, Berlin, Torgau
     const s = p.labelSize;
@@ -117,12 +116,11 @@ export default {
       update(t, p) {
         const uw = H.easeInOut(H.span(t, p.tWest, p.tBerlin - .9)), ue = H.easeInOut(H.span(t, p.tEast, p.tBerlin));
         occ.uniforms.uw.value = uw; occ.uniforms.ue.value = ue;
-        buildLines(uw, ue);
         for (const ar of arrows) {
-          const u = ar.side === 'w' ? uw : ue, A = ar.side === 'w' ? [WEST_A, WEST_B] : [EAST_A, EAST_B];
-          const tip = lerpFront(A[0], A[1], ar.lat, u) + (ar.side === 'w' ? -.35 : .35);
+          const u = ar.side === 'w' ? uw : ue;
+          const tip = lerpFront(ar.A, ar.B, ar.lat, u) + ar.sg * .3;                          // Spitze an der Front
           const frac = (tip - ar.lon0) / (ar.lon1 - ar.lon0), t0 = (ar.side === 'w' ? p.tWest : p.tEast) + ar.d;
-          ar.a.setProgress(Math.max(.05, frac) * H.span(t, t0 - .5, t0 + .2));
+          ar.a.setProgress(H.clamp(frac, 0, 1) * H.easeOut(H.span(t, t0 - .7, t0)));
         }
         const meet = H.span(t, p.tBerlin - 1.4, p.tBerlin - .9);
         torgau.userData.set({ opacity: meet, halo: meet > 0 ? ((t - p.tBerlin + 1.4) % 1.4) / 1.4 : 0 }); if (lTorgau) lTorgau.material.opacity = meet;
@@ -130,7 +128,7 @@ export default {
         const fk = H.span(t, p.tBerlin, p.tBerlin + .4);
         berlin.userData.set({ opacity: 1 - fk }); berlinS.userData.set({ opacity: fk, halo: fall ? ((t - p.tBerlin) % 1.2) / 1.2 : 0, scale: 1 + .2 * fk });
       },
-      dispose() { lineMat.dispose(); occ.dispose(); }
+      dispose() { occ.dispose(); }
     };
   }
 };

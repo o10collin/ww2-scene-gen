@@ -25,7 +25,7 @@ function terrainY(x, z) {
 }
 
 export default {
-  id: 'd-day', title: 'D-Day in der Normandie', seed: 20, duration: 9, rev: 3,
+  id: 'd-day', title: 'D-Day in der Normandie', seed: 20, duration: 9, rev: 4,
   script: 'Im Juni 1944 landen die Westalliierten in der Normandie.',
   caption: { title: 'Landung in der Normandie', sub: '6. Juni 1944' },
   params: {
@@ -75,21 +75,81 @@ export default {
     const foam = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(foamPts), 120, .18, 4), new THREE.MeshBasicMaterial({ color: '#c9d3dc', transparent: true, opacity: .55 }));
     foam.scale.y = .3; scene.add(foam);
 
-    // ---------- Higgins-Boote (LCVP): Rumpf mit Bugrampe, Steuerstand, MG-Lafetten ----------
-    const lcvp = () => {
-      const g = new THREE.Group(), hullM = new THREE.MeshLambertMaterial({ color: '#5d6a55', flatShading: true, side: THREE.DoubleSide }), dark = new THREE.MeshLambertMaterial({ color: '#2f3430', flatShading: true });
-      const add = (geo, x, y, z, m = hullM) => { const b = new THREE.Mesh(geo, m); b.position.set(x, y, z); b.castShadow = true; g.add(b); return b; };
-      // Rumpf: Querschnitt mit ausgestellten Bordwänden und offenem Truppenraum, entlang der Länge extrudiert
-      const sec = new THREE.Shape([[-1.15, 0], [1.15, 0], [1.6, 2.0], [-1.6, 2.0]].map(([z, y]) => new THREE.Vector2(z, y)));
-      sec.holes.push(new THREE.Path([[-1.0, .3], [-1.46, 1.98], [1.46, 1.98], [1.0, .3]].map(([z, y]) => new THREE.Vector2(z, y))));
+    // ---------- Higgins-Boote (LCVP): Sperrholzrumpf mit Bugrampe aus Stahl, Steuerstand mit Panzerschild, zwei
+    // MG-Lafetten, Motorabdeckung, Scheuerleisten, dunkler Unterwasseranstrich, Bugwelle und Heckwasser ----------
+    const lcvp = (hullNo) => {
+      const g = new THREE.Group();
+      const hullM = new THREE.MeshLambertMaterial({ color: '#5d6a55', flatShading: true, side: THREE.DoubleSide }), dark = new THREE.MeshLambertMaterial({ color: '#2f3430', flatShading: true });
+      const steel = new THREE.MeshLambertMaterial({ color: '#59625a', flatShading: true }), trim = new THREE.MeshLambertMaterial({ color: '#46503f', flatShading: true });
+      const add = (geo, x, y, z, m = hullM, parent = g) => { const b = new THREE.Mesh(geo, m); b.position.set(x, y, z); b.castShadow = true; parent.add(b); return b; };
+      // Rumpf: U-förmiger Querschnitt (Boden, ausgestellte Bordwände, oben offen) entlang der Länge extrudiert
+      const sec = new THREE.Shape([[-1.15, 0], [1.15, 0], [1.6, 2.0], [1.46, 2.0], [1.0, .3], [-1.0, .3], [-1.46, 2.0], [-1.6, 2.0]].map(([z, y]) => new THREE.Vector2(z, y)));
       const hullGeo = new THREE.ExtrudeGeometry(sec, { depth: 9.4, bevelEnabled: false }); hullGeo.translate(0, 0, -4.9); hullGeo.rotateY(Math.PI / 2);
       add(hullGeo, 0, 0, 0);
-      add(new THREE.BoxGeometry(9.2, .1, 2.0), 0, .32, 0, dark);                               // Boden des Truppenraums
+      add(new THREE.BoxGeometry(9.2, .1, 2.0), 0, .32, 0, dark);                                // Boden des Truppenraums
+      for (let k = 0; k < 6; k++) add(new THREE.BoxGeometry(.06, .05, 1.9), -2.6 + k * 1.3, .39, 0, trim);   // Bodenleisten
       const stern = add(new THREE.CylinderGeometry(1.6, 1.15, 2.0, 8, 1, false, 0, Math.PI), -4.9, 1.0, 0); stern.rotation.y = Math.PI;   // gerundetes Heck
-      add(new THREE.BoxGeometry(1.5, .55, 2.6), -4.0, 2.25, 0);                                 // Steuerstand
-      for (const z of [-1, 1]) { const mg = add(new THREE.BoxGeometry(.7, .09, .09), -3.4, 2.65, z * 1.1, dark); mg.rotation.z = .3; }   // MG
+      const flare = Math.atan2(.45, 2.0);                                                         // Neigung der Bordwand
+      for (const sz of [-1, 1]) {
+        add(new THREE.BoxGeometry(9.5, .1, .24), -.2, 2.03, sz * 1.53, trim);                    // Schandeck (Bordwandkappe)
+        for (const y of [.75, 1.4]) { const rail = add(new THREE.BoxGeometry(9.3, .07, .06), -.2, y, sz * (1.15 + .45 * y / 2 + .03), trim); rail.rotation.x = -sz * flare; }   // Scheuerleisten
+        const band = add(new THREE.BoxGeometry(9.4, .34, .03), -.2, .17, sz * (1.15 + .45 * .17 / 2 + .02), dark); band.rotation.x = -sz * flare;   // Unterwasseranstrich
+        for (const x of [-1.6, 1.4]) { const cleat = add(new THREE.BoxGeometry(.3, .08, .12), x, 2.11, sz * 1.53, dark); }   // Klampen
+      }
+      // Rumpfnummer an beiden Seiten
+      const numTex = (() => { const c = document.createElement('canvas'); c.width = 256; c.height = 64; const q = c.getContext('2d'); q.fillStyle = '#e8e6dc'; q.font = '700 44px Inter, Arial, sans-serif'; q.textAlign = 'center'; q.textBaseline = 'middle'; q.fillText(hullNo, 128, 34); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+      for (const sz of [-1, 1]) { const num = new THREE.Mesh(new THREE.PlaneGeometry(1.5, .38), new THREE.MeshLambertMaterial({ map: numTex, transparent: true })); num.position.set(-2.4, 1.1, sz * (1.15 + .45 * 1.1 / 2 + .045)); num.rotation.set(-sz * flare, sz > 0 ? 0 : Math.PI, 0, 'YXZ'); g.add(num); }
+      // Heck: Motorabdeckung mit Lüftungsgittern, Auspuff, Steuerstand mit Panzerschild und Rad, Bootsführer
+      add(new THREE.BoxGeometry(1.0, .9, 2.1), -4.45, .82, 0, steel);
+      for (let k = 0; k < 4; k++) add(new THREE.BoxGeometry(.06, .02, 1.6), -4.75 + k * .2, 1.28, 0, dark);
+      const ex = add(new THREE.CylinderGeometry(.07, .07, .5, 8), -4.85, 2.15, -.9, dark);
+      const shield = add(new THREE.BoxGeometry(.08, .55, .9), -3.35, 2.25, .55, steel);
+      add(new THREE.BoxGeometry(.4, .06, .9), -3.55, 2.5, .55, steel);
+      const wheel = add(new THREE.TorusGeometry(.16, .025, 6, 14), -3.5, 1.7, .55, dark); wheel.rotation.y = Math.PI / 2;
+      // zwei MG auf Pivotlafetten mit Schutzschild an den Heckecken
+      for (const sz of [-1, 1]) {
+        const ped = add(new THREE.CylinderGeometry(.05, .07, 1.7, 8), -3.9, 1.2, sz * 1.15, dark);
+        const gun = new THREE.Group(); gun.position.set(-3.9, 2.12, sz * 1.15); gun.rotation.set(0, sz * .25, .12); g.add(gun);
+        add(new THREE.BoxGeometry(.5, .14, .12), 0, 0, 0, dark, gun);
+        const brl = add(new THREE.CylinderGeometry(.025, .03, .8, 6), .62, .02, 0, dark, gun); brl.rotation.z = Math.PI / 2;
+        add(new THREE.BoxGeometry(.06, .36, .42), .22, .08, 0, steel, gun);
+      }
+      // Bugrampe: Stahlplatte mit Rippen außen, Scharnierrolle unten, Haltetrossen zu den Bordwänden
       const ramp = new THREE.Group(); ramp.position.set(4.55, .1, 0); g.add(ramp);
-      const rp = new THREE.Mesh(new THREE.BoxGeometry(.16, 2.0, 2.6), hullM); rp.position.set(0, 1.0, 0); rp.castShadow = true; ramp.add(rp);
+      add(new THREE.BoxGeometry(.16, 2.0, 2.6), 0, 1.0, 0, steel, ramp);
+      for (const z of [-.85, 0, .85]) add(new THREE.BoxGeometry(.08, 1.9, .09), .11, 1.0, z, dark, ramp);
+      for (const y of [.55, 1.45]) add(new THREE.BoxGeometry(.08, .08, 2.5), .11, y, 0, dark, ramp);
+      for (let k = 0; k < 7; k++) add(new THREE.BoxGeometry(.05, .04, 2.2), -.1, .25 + k * .26, 0, trim, ramp);   // Trittleisten innen
+      const hinge = add(new THREE.CylinderGeometry(.08, .08, 2.7, 10), 0, 0, 0, dark, ramp); hinge.rotation.x = Math.PI / 2;
+      const cableM = new THREE.MeshBasicMaterial({ color: '#1d1f1e' }), cables = [];
+      for (const sz of [-1, 1]) { const c = new THREE.Mesh(new THREE.CylinderGeometry(.018, .018, 1, 5), cableM); g.add(c); cables.push({ c, sz }); }
+      const a = new THREE.Vector3(), b = new THREE.Vector3(), mid = new THREE.Vector3();
+      g.userData.setRamp = ang => {                                                               // Rampe klappen, Trossen nachführen
+        ramp.rotation.z = ang;
+        for (const { c, sz } of cables) {
+          a.set(4.55 + Math.sin(-ang) * 1.9, .1 + Math.cos(-ang) * 1.9, sz * 1.2);              // Oberkante der Rampe
+          b.set(3.7, 2.05, sz * 1.5);                                                           // Umlenkrolle an der Bordwand
+          const len = a.distanceTo(b); mid.addVectors(a, b).multiplyScalar(.5);
+          c.position.copy(mid); c.scale.set(1, len, 1); c.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.sub(a).normalize());
+        }
+      };
+      g.userData.setRamp(0);
+      // Bugwelle (zwei auslaufende Schaumstreifen), Deckkraft folgt dem Tempo
+      // Schaumtextur mit weichen Rändern: quer zur Fahrt ausgeblendet, nach hinten auslaufend, leicht fleckig
+      const foamTex = (() => {
+        const c = document.createElement('canvas'); c.width = 128; c.height = 64; const q = c.getContext('2d'), img = q.createImageData(128, 64);
+        for (let y = 0; y < 64; y++) for (let x = 0; x < 128; x++) {
+          const u = x / 127, v = y / 63, n = .75 + .25 * Math.sin(x * .9 + Math.sin(y * 1.3) * 3) * Math.sin(y * .7 + x * .21);
+          const a = Math.pow(Math.sin(v * Math.PI), 2.2) * Math.pow(1 - u, 1.4) * H.smooth(Math.min(1, u / .14)) * n;   // u = 0: am Boot, u = 1: auslaufend
+          const i = (y * 128 + x) * 4; img.data[i] = img.data[i + 1] = img.data[i + 2] = 240; img.data[i + 3] = Math.max(0, Math.min(255, a * 255));
+        }
+        q.putImageData(img, 0, 0); return new THREE.CanvasTexture(c);
+      })();
+      const foamM = new THREE.MeshBasicMaterial({ color: '#e4eaef', map: foamTex, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+      const wake = new THREE.Group(); g.add(wake);
+      // Bugwelle: zwei Streifen, die schräg von den Bugecken nach hinten laufen (dicht am Bug, nach hinten auslaufend)
+      for (const sz of [-1, 1]) { const wv = new THREE.Mesh(new THREE.PlaneGeometry(4.6, .8), foamM); wv.rotation.set(-Math.PI / 2, 0, Math.PI + sz * .3); wv.position.set(2.5, .24, sz * 2.05); wake.add(wv); }
+      g.userData.setWake = k => { foamM.opacity = .7 * k; wake.visible = k > .01; };
       g.userData.ramp = ramp;
       return g;
     };
@@ -97,7 +157,7 @@ export default {
     const nC = p.crafts;
     for (let i = 0; i < nC; i++) {
       const z = (i - (nC - 1) / 2) * 9 + (r() - .5) * 1.5;
-      const craft = lcvp(); scene.add(craft);
+      const craft = lcvp(`PA 26-${11 + i * 3}`); scene.add(craft);
       const wave = i % 2, stopX = shoreX(z) - 7.2, delay = wave * 1.3 + r() * .4;   // zwei Wellen
       const cr = { craft, z, stopX, delay, ph: r() * 6, tArrive: delay + p.arrive };
       crafts.push(cr);
@@ -172,7 +232,8 @@ export default {
           const x = H.lerp(cr.stopX - 38, cr.stopX, uu), bob = 1 - u;   // aufgelaufen: liegt still
           cr.craft.position.set(x, .05 + Math.sin(t * 2.1 + cr.ph) * .12 * bob, cr.z);
           cr.craft.rotation.z = Math.sin(t * 1.6 + cr.ph) * .03 * bob + (1 - u) * .03; cr.craft.rotation.x = Math.sin(t * 1.3 + cr.ph) * .02 * bob;
-          cr.craft.userData.ramp.rotation.z = -1.45 * H.easeOut(H.span(t, cr.tArrive, cr.tArrive + .6));   // Rampe klappt nach vorn ab
+          cr.craft.userData.setRamp(-1.45 * H.easeOut(H.span(t, cr.tArrive, cr.tArrive + .6)));   // Rampe klappt nach vorn ab
+          cr.craft.userData.setWake(u > 0 && u < 1 ? (1 - u) * H.span(u, 0, .08) : 0);              // Bugwelle nur in Fahrt
           cr.x = x;
         }
         for (const s of soldiers) {

@@ -48,9 +48,11 @@ const S_SLOVAKIA = [[16.8, 47.6], [16.8, 48.0], [17.3, 48.05], [17.9, 48.25], [1
 // italienisch-bulgarische Demarkationslinie: Schar-Gebirge, westlich von Tetovo, Gostivar, Kičevo, zwischen Struga und Ohrid
 const W_MACEDONIA = [[20.3, 42.5], [21.15, 42.25], [21.0, 42.0], [20.95, 41.75], [20.98, 41.5], [20.78, 41.28], [20.72, 40.9], [20.3, 40.9]];
 const E_MAC_THRACE = [[22.9, 41.8], [26.8, 41.8], [26.8, 40.5], [23.7, 40.5], [22.95, 41.0]];
+// Generalgouvernement (deutsch besetztes Restpolen mit Ostgalizien)
+export const GG_1943 = [{ c: '616', clip: GG_POLAND }, { c: '804', clip: GALICIA }];
 export const GROUPS_1943 = [
   REICH_1942,
-  [{ c: '616', clip: GG_POLAND }, { c: '804', clip: GALICIA }],                              // Generalgouvernement
+  GG_1943,                                                                                    // Generalgouvernement
   USSR_1943,
   [{ c: '348' }, { c: '804', clip: ZAKARPATTIA }, { c: '642', clip: N_TRANSYLVANIA },        // Ungarn mit Karpatenukraine, Nordsiebenbürgen,
    { c: '703', clip: S_SLOVAKIA }, { c: '688', clip: BACKA }, { c: '705', clip: PREKMURJE }, { c: '191', clip: MEDJIMURJE }],   // Südslowakei, Batschka, Übermurgebiet, Murinsel

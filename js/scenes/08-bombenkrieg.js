@@ -7,7 +7,7 @@ const { P } = H;
 // einschlagen, wo danach Feuerball, Brand und aufsteigender Rauch stehen. Suchscheinwerfer tasten den Himmel ab,
 // Flakwolken platzen in Höhe der Bomber. Kamera niedrig über den Dächern.
 export default {
-  id: 'bombenkrieg', title: 'Bombenkrieg', seed: 18, duration: 10, rev: 3,
+  id: 'bombenkrieg', title: 'Bombenkrieg', seed: 18, duration: 10, rev: 4,
   script: 'Auf Seiten der Alliierten wird daraufhin auch eskaliert. Sie fangen damit an, deutsche Städte und Industrieanlagen zu bombardieren.',
   caption: { title: 'Luftkrieg gegen deutsche Städte', sub: '1943' },
   params: {
@@ -16,8 +16,8 @@ export default {
     buildings: { type: 'number', min: 10, max: 140, step: 5, value: 90, label: 'Gebäude' },
     searchlights: { type: 'number', min: 0, max: 8, step: 1, value: 4, label: 'Suchscheinwerfer' },
     flak: { type: 'number', min: 0, max: 30, step: 1, value: 10, label: 'Flakwolken' },
-    altitude: { type: 'number', min: 10, max: 40, step: 1, value: 19, label: 'Flughöhe (m)' },
-    speed: { type: 'number', min: 3, max: 20, step: .5, value: 10, label: 'Fluggeschwindigkeit (m/s)' },
+    altitude: { type: 'number', min: 10, max: 50, step: 1, value: 25, label: 'Flughöhe Anflug (m)' },
+    speed: { type: 'number', min: 5, max: 40, step: .5, value: 21, label: 'Fluggeschwindigkeit (m/s)' },
     litWindows: { type: 'number', min: 0, max: 1, step: .05, value: .2, label: 'Erleuchtete Fenster (Verdunkelung)' },
     skyColor: { type: 'color', value: '#101722', label: 'Nachthimmel' },
     bomberGlow: { type: 'color', value: '#2f7cff', label: 'Bomber (Rollenfarbe)' },
@@ -38,28 +38,31 @@ export default {
     const tower = H.box(4, 20, 4, '#3a404b'); tower.position.set(0, 10, 10); const spire = H.cone(2.8, 8, '#2a2f38', 4); spire.position.set(0, 24, 10);
     church.add(nave, roof, tower, spire); church.position.set(14, 0, -60); scene.add(church);   // außerhalb des Flugkorridors (z -30 … -2)
 
-    // Bomber im Sturzangriff wie in Szene 1: jede Maschine fliegt eine eigene Bahn (Anflug, Sinkflug, tiefster Punkt
-    // über dem Ziel, Hochziehen, Abflug aus dem Bild). Die Nase zeigt stets entlang der Bahn. Die Bomben werden am
-    // tiefsten Punkt ausgeklinkt, übernehmen Tempo und Richtung der Maschine und fallen ballistisch; wo sie aufschlagen,
-    // stehen Feuerball, Brand, Feuerschein und Rauch.
+    // Bomber im Sturzangriff wie in Szene 1: jede Maschine fliegt eine eigene Bahn (hoher Anflug, steiler Sturz,
+    // Abfangen über den Dächern, Hochziehen, Abflug aus dem Bild). Die Nase zeigt stets entlang der Bahn. Die Bomben
+    // werden im Sturz ausgeklinkt, übernehmen Tempo und Richtung der Maschine und fallen ballistisch; wo sie
+    // aufschlagen, stehen Feuerball, Brand, Feuerschein und Rauch.
     const g = 9.81, V = p.speed;
     const bombers = [], bombs = [];
     const P = (x, y, z) => new THREE.Vector3(x, y, z);
     for (let i = 0; i < p.bombers; i++) {
       const tint = new THREE.Color(p.bomberGlow).offsetHSL((r() - .5) * .04, (r() - .5) * .2, (r() - .5) * .14);
-      const four = r() < .65, span = four ? 6.6 + r() * 1.6 : 5.2 + r() * 1.0;
+      const four = r() < .5, span = four ? 7.0 + r() * 1.2 : 5.8 + r() * .9;
       const m = H.faceZ(H.aircraft(H.glowMat(tint, 1.45 + r() * .35), { span, length: span * (.66 + r() * .1), engines: four ? 4 : 2 })); scene.add(m);
-      const xT = -26 + r() * 22, z = -30 + (i + .5) * (28 / p.bombers) + (r() - .5) * 2, alt = p.altitude + r() * 4, low = Math.max(9, alt - 8 - r() * 3);
-      const curve = new THREE.CatmullRomCurve3([P(xT - 70, alt + 2, z - 3), P(xT - 26, alt, z - 1), P(xT - 9, low + 3, z), P(xT, low, z), P(xT + 11, low + 3.5, z), P(xT + 34, alt + 2, z + 1), P(xT + 80, alt + 8, z + 3)], false, 'centripetal');
-      const L = curve.getLength(), N = 600;
-      let uLow = 0, yMin = 1e9; for (let k = 0; k <= N; k++) { const y = curve.getPointAt(k / N).y; if (y < yMin) { yMin = y; uLow = k / N; } }
-      const tRel = 1.6 + i * (6.2 / Math.max(1, p.bombers - 1 || 1)) + (r() - .5) * .3;   // Zeitpunkt am tiefsten Punkt
-      const b = { m, curve, L, sLow: uLow * L, tRel, roll: (r() - .5) * .25 };
+      // Bahn wie die Sturzkampfflieger in Szene 1: hoher Anflug, steiler Sturz auf das Ziel, Abfangen knapp über den
+      // Dächern (höchstes Haus 8 m), dann steil hochziehen und aus dem Bild
+      const xT = -24 + r() * 20, z = -30 + (i + .5) * (28 / p.bombers) + (r() - .5) * 2, alt = p.altitude + r() * 4, low = 12.5 + r() * 2.5, lane = (r() - .5) * 2;
+      const curve = new THREE.CatmullRomCurve3([P(xT - 58, alt + 4, z - 1 + lane), P(xT - 14, alt, z + lane * .5), P(xT - 4, low + 6, z), P(xT + 6, low, z), P(xT + 60, alt - 2, z - 1 + lane)], false, 'catmullrom', .3);
+      const L = curve.getLength(), N = 800;
+      // Ausklinken im steilen Teil des Sturzes, kurz bevor die Maschine abfängt
+      let uRel = 0; for (let k = 0; k <= N; k++) { const q = curve.getPointAt(k / N); if (q.x > xT - 6 && q.y <= low + 4.5) { uRel = k / N; break; } }
+      const tRel = 1.4 + i * (6.6 / Math.max(1, p.bombers - 1 || 1)) + (r() - .5) * .3;   // Zeitpunkt des Ausklinkens
+      const b = { m, curve, L, sLow: uRel * L, tRel, roll: (r() - .5) * .3 };
       bombers.push(b);
       for (let k = 0; k < p.bombsPer; k++) {
-        const ds = (k - (p.bombsPer - 1) / 2) * 1.6, s0 = b.sLow + ds;                 // kurze Reihe um den tiefsten Punkt
+        const ds = (k - (p.bombsPer - 1) / 2) * 1.4, s0 = b.sLow + ds;                 // kurze Reihe um den Ausklinkpunkt
         const p0 = curve.getPointAt(s0 / L), v0 = curve.getTangentAt(s0 / L).multiplyScalar(V);
-        p0.y -= .7;
+        p0.y -= .5;
         const ft = (v0.y + Math.sqrt(v0.y * v0.y + 2 * g * p0.y)) / g;                  // Fallzeit bis zum Boden
         const ix = p0.x + v0.x * ft, iz = p0.z + v0.z * ft;
         const model = H.bomb(1.6, H.glowMat(p.bombColor, 1.25), .2); model.visible = false; scene.add(model);

@@ -7,7 +7,7 @@ const { P } = H;
 // Schutt, suchen, trauern; Opfer liegen am Straßenrand; einige gehen mit Habseligkeiten die Straße entlang
 // (feste Bahnen, niemand läuft durch etwas hindurch). Die Kamera fährt langsam die Straße hinein.
 export default {
-  id: 'zerstoerte-wohngebiete', title: 'Zerstörte Wohngebiete', seed: 19, duration: 8, rev: 3,
+  id: 'zerstoerte-wohngebiete', title: 'Zerstörte Wohngebiete', seed: 19, duration: 8, rev: 4,
   script: 'Viele Wohngebiete werden zerstört und zahlreiche Zivilisten sterben.',
   caption: { title: 'Der Morgen danach', sub: 'Zivile Opfer' },
   params: {
@@ -19,7 +19,8 @@ export default {
     skyColor: { type: 'color', value: '#1a2230', label: 'Himmel (Morgen)' },
     groundColor: { type: 'color', value: '#5a6370', label: 'Boden' },
     ruinColor: { type: 'color', value: '#566070', label: 'Ruinen' },
-    civilGlow: { type: 'boolean', value: false, label: 'Zivilisten als weiße Leuchtfiguren' },
+    civilGlow: { type: 'boolean', value: true, label: 'Zivilisten leuchten in Rollenfarbe' },
+    civilColor: { type: 'color', value: '#ff2d2d', label: 'Zivilisten (Rollenfarbe: deutsch = rot)' },
     ...H.cameraParams([-24, 4.6, 1.2], [-15, 4.0, .8], [10, 1.2, 0], 40)
   },
   build({ scene, params: p, rng: r, shadows }) {
@@ -107,7 +108,9 @@ export default {
       for (let k = 0; k < 4; k++) { const st = H.box(.5, 4 + r() * 3, .5, '#4b4946'); st.position.set(-9.8 + (k % 2) * 3.6, 27, -1.8 + (k >> 1) * 3.6); church.add(st); } }   // ausgebrannter Turmstumpf mit Rippen
     church.position.set(62, 0, 9); church.rotation.y = -Math.PI / 2; scene.add(church);
 
-    // Kleidung in gedeckten Farben (keine weißen Leuchtfiguren)
+    // Kleidung in gedeckten Farben (nur ohne Leuchtfarbe sichtbar)
+    // Leuchtfarbe wie im übrigen Video (deutsch = rot), je Person nur minimal in der Helligkeit variiert
+    const civilTint = i => p.civilGlow ? new THREE.Color(p.civilColor).offsetHSL(0, 0, ((i * 53) % 9 - 4) * .006) : null;
     const CLOTHES = ['#6b5b4a', '#4e5f7a', '#7a6e5a', '#5a6a5c', '#8a7a6a', '#5d4f63', '#6e6a62', '#46505e'];
     // Stehende Gruppen am Rand (Schutt räumen, suchen, trauern) und Opfer
     const still = [
@@ -117,7 +120,7 @@ export default {
     ];
     const people = [];
     still.forEach(([pose, x, z, ry], i) => {
-      const f = H.figure({ color: CLOTHES[i % CLOTHES.length], scale: i === 2 ? .75 : 1, glow: p.civilGlow ? '#dfe6f0' : null, strength: 1.05, model: 'civil', seed: i * 7 + 5, pose, loopPose: !/Laying/.test(pose) });
+      const f = H.figure({ color: CLOTHES[i % CLOTHES.length], scale: i === 2 ? .75 : 1, glow: civilTint(i), strength: 1.45, model: 'civil', seed: i * 7 + 5, pose, loopPose: !/Laying/.test(pose) });
       f.position.set(x, 0, z); f.rotation.y = ry; scene.add(f); people.push({ f, pose, ph: r() * 5 });
     });
     // Gehende auf festen Bahnen (je Bahn eine Richtung und ein Tempo)
@@ -127,7 +130,7 @@ export default {
     for (let i = 0; i < p.walkers; i++) {
       const lane = i % LANES.length, dir = lane % 2 ? 1 : -1;
       const clip = i % 3 === 1 ? 'Walk_Carry' : (i % 3 === 2 ? 'Injured_Walking' : 'Walk_Natural');
-      const f = H.figure({ color: CLOTHES[(i + 3) % CLOTHES.length], scale: i === 3 ? .78 : 1, glow: p.civilGlow ? '#dfe6f0' : null, strength: 1.05, model: 'civil', clips: { idle: 'Standing_Idle_Loop', walk: clip, run: clip }, seed: 60 + i * 9, carry: clip === 'Walk_Carry' });
+      const f = H.figure({ color: CLOTHES[(i + 3) % CLOTHES.length], scale: i === 3 ? .78 : 1, glow: civilTint(i + 20), strength: 1.45, model: 'civil', clips: { idle: 'Standing_Idle_Loop', walk: clip, run: clip }, seed: 60 + i * 9, carry: clip === 'Walk_Carry' });
       f.rotation.y = dir > 0 ? 0 : Math.PI; scene.add(f);
       walkers.push({ f, dir, z: LANES[lane], x0: (dir > 0 ? 0 : 22) + Math.floor(i / LANES.length) * 6 * dir + r() * 2, v: laneV[lane] });   // nie direkt vor der Kamera
     }
